@@ -1,0 +1,8 @@
+#!/bin/bash
+
+PACKAGE="${PACKAGE:-github.com/travis-ci/jupiter-brain}"
+
+gometalinter "${PACKAGE}"
+for pkg in server server/jsonapi cmd/jb-server ; do
+	gometalinter "${PACKAGE}/${pkg}"
+done
