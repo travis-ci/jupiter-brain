@@ -1,0 +1,18 @@
+language: go
+before_install:
+- go get github.com/hamfist/deppy
+- go get github.com/golang/lint/golint
+- go get golang.org/x/tools/cmd/cover
+install:
+- deppy restore
+script:
+- make test
+- make save
+- git diff --exit-code
+- git diff --cached --exit-code
+after_success:
+- mkdir -p build
+- cp -v ${GOPATH%%:*}/bin/jb-server ./build/
+addons:
+  artifacts:
+    paths: build/
