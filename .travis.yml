@@ -16,3 +16,4 @@ after_success:
 addons:
   artifacts:
     paths: build/
+    permissions: public-read
