@@ -89,6 +89,7 @@ func (srv *server) setupMiddleware() {
 	srv.n.Use(negroni.NewRecovery())
 	srv.n.Use(negronilogrus.NewMiddleware())
 	srv.n.Use(gzip.Gzip(gzip.DefaultCompression))
+	srv.n.Use(negroni.HandlerFunc(srv.authMiddleware))
 	srv.n.UseHandler(srv.r)
 }
 
