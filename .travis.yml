@@ -11,6 +11,7 @@ script:
 - git diff --exit-code
 - git diff --cached --exit-code
 after_success:
+- bin/atlas-push
 - mkdir -p build
 - cp -v ${GOPATH%%:*}/bin/jb-server ./build/
 addons:
