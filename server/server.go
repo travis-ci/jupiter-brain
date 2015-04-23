@@ -23,7 +23,7 @@ type server struct {
 
 	log *logrus.Logger
 
-	i *jupiterbrain.InstanceManager
+	i jupiterbrain.InstanceManager
 
 	n *negroni.Negroni
 	r *mux.Router
@@ -58,7 +58,7 @@ func newServer(cfg *Config) (*server, error) {
 
 		log: log,
 
-		i: jupiterbrain.NewInstanceManager(log, u, paths),
+		i: jupiterbrain.NewVSphereInstanceManager(log, u, paths),
 
 		n: negroni.New(),
 		r: mux.NewRouter(),
