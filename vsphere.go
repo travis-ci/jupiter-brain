@@ -136,6 +136,10 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, base string) (*Insta
 		return nil, fmt.Errorf("couldn't get snapshot info for base VM: %s", err)
 	}
 
+	if mvm.Snapshot == nil {
+		return nil, fmt.Errorf("invalid base VM (no snapshot)")
+	}
+
 	snapshotTree, ok := i.findSnapshot(mvm.Snapshot.RootSnapshotList, "base")
 	if !ok {
 		return nil, fmt.Errorf("invalid base VM (no snapshot)")
