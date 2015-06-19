@@ -4,11 +4,11 @@ SUBPACKAGES := \
 	$(PACKAGE)/server \
 	$(PACKAGE)/server/jsonapi
 
-VERSION_VAR := $(PACKAGE)/cmd/jb-server.VersionString
+VERSION_VAR := main.VersionString
 VERSION_VALUE ?= $(shell git describe --always --dirty 2> /dev/null)
-REV_VAR := $(PACKAGE)/cmd/jb-server.RevisionString
+REV_VAR := main.RevisionString
 REV_VALUE ?= $(shell git rev-parse --sq HEAD 2> /dev/null || echo "'???'")
-GENERATED_VAR := $(PACKAGE)/cmd/jb-server.GeneratedString
+GENERATED_VAR := main.GeneratedString
 GENERATED_VALUE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%S%z')
 
 FIND ?= find
