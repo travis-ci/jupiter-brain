@@ -43,10 +43,6 @@
 			"Rev": "d5e114d7a445f7a3652cf807d3f83d5dceb8de26"
 		},
 		{
-			"ImportPath": "github.com/phyber/negroni-gzip/gzip",
-			"Rev": "48f82605778a579cb8172122897f589e4023b537"
-		},
-		{
 			"ImportPath": "github.com/vmware/govmomi",
 			"Comment": "v0.1.0-6-g2382388",
 			"Rev": "23823888741e72c41f24c46e7fd12d08a226f762"
