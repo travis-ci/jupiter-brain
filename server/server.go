@@ -36,8 +36,6 @@ func newServer(cfg *Config) (*server, error) {
 		log.Level = logrus.DebugLevel
 	}
 
-	logrus.SetFormatter(&logrus.TextFormatter{DisableColors: true})
-
 	u, err := url.Parse(cfg.VSphereURL)
 	if err != nil {
 		return nil, err

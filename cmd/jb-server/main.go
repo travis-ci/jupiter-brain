@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/travis-ci/jupiter-brain/server"
 )
@@ -69,6 +70,8 @@ func main() {
 }
 
 func runServer(c *cli.Context) {
+	logrus.SetFormatter(&logrus.TextFormatter{DisableColors: true})
+
 	server.Main(&server.Config{
 		Addr:      c.String("addr"),
 		AuthToken: c.String("auth-token"),
