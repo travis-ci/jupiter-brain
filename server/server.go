@@ -14,6 +14,7 @@ import (
 	"github.com/meatballhat/negroni-logrus"
 	"github.com/travis-ci/jupiter-brain"
 	"github.com/travis-ci/jupiter-brain/server/jsonapi"
+	"github.com/travis-ci/jupiter-brain/server/negroniraven"
 	"golang.org/x/net/context"
 )
 
@@ -90,6 +91,11 @@ func (srv *server) setupMiddleware() {
 	srv.n.Use(negroni.NewRecovery())
 	srv.n.Use(negronilogrus.NewMiddleware())
 	srv.n.Use(negroni.HandlerFunc(srv.authMiddleware))
+	nr, err := negroniraven.NewMiddleware(srv.sentryDSN)
+	if err != nil {
+		panic(err)
+	}
+	srv.n.Use(nr)
 	srv.n.UseHandler(srv.r)
 }
 

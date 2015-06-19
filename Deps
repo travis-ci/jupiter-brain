@@ -31,6 +31,10 @@
 			"Rev": "c7477ad8e330bef55bf1ebe300cf8aa67c492d1b"
 		},
 		{
+			"ImportPath": "github.com/getsentry/raven-go",
+			"Rev": "3fd636ed242c26c0f55bc9ee1fe47e1d6d2d77f7"
+		},
+		{
 			"ImportPath": "github.com/gorilla/context",
 			"Rev": "215affda49addc4c8ef7e2534915df2c8c35c6cd"
 		},
@@ -44,8 +48,8 @@
 		},
 		{
 			"ImportPath": "github.com/vmware/govmomi",
-			"Comment": "v0.1.0-6-g2382388",
-			"Rev": "23823888741e72c41f24c46e7fd12d08a226f762"
+			"Comment": "prerelease-v0.1.0-52-g871f5d4-1-gdb50806",
+			"Rev": "db50806964c43230e0f61a2cb9104c7bed497628"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
