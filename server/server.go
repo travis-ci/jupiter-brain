@@ -12,7 +12,6 @@ import (
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
 	"github.com/meatballhat/negroni-logrus"
-	"github.com/phyber/negroni-gzip/gzip"
 	"github.com/travis-ci/jupiter-brain"
 	"github.com/travis-ci/jupiter-brain/server/jsonapi"
 	"golang.org/x/net/context"
@@ -90,7 +89,6 @@ func (srv *server) setupRoutes() {
 func (srv *server) setupMiddleware() {
 	srv.n.Use(negroni.NewRecovery())
 	srv.n.Use(negronilogrus.NewMiddleware())
-	srv.n.Use(gzip.Gzip(gzip.DefaultCompression))
 	srv.n.Use(negroni.HandlerFunc(srv.authMiddleware))
 	srv.n.UseHandler(srv.r)
 }
