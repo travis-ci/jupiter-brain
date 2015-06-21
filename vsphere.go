@@ -108,41 +108,15 @@ func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) 
 	return instances, nil
 }
 
-func (i *vSphereInstanceManager) Start(ctx context.Context, base string) (*Instance, error) {
+func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*Instance, error) {
 	client, err := i.client(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	searchIndex := object.NewSearchIndex(client.Client)
-
-	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.BasePath+base)
+	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, baseName)
 	if err != nil {
-		return nil, err
-	}
-
-	if vmRef == nil {
-		return nil, BaseVirtualMachineNotFoundError{Path: i.paths.BasePath, Name: base}
-	}
-
-	vm, ok := vmRef.(*object.VirtualMachine)
-	if !ok {
-		return nil, fmt.Errorf("base VM %s is a %T, but expected VirtualMachine", base, vmRef)
-	}
-
-	var mvm mo.VirtualMachine
-	err = vm.Properties(ctx, vm.Reference(), []string{"snapshot"}, &mvm)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't get snapshot info for base VM: %s", err)
-	}
-
-	if mvm.Snapshot == nil {
-		return nil, fmt.Errorf("invalid base VM (no snapshot)")
-	}
-
-	snapshotTree, ok := i.findSnapshot(mvm.Snapshot.RootSnapshotList, "base")
-	if !ok {
-		return nil, fmt.Errorf("invalid base VM (no snapshot)")
+		return nil, fmt.Errorf("couldn't get base VM and snapshot: %s", err)
 	}
 
 	resourcePool, err := i.resourcePool(ctx)
@@ -326,6 +300,46 @@ func (i *vSphereInstanceManager) resourcePool(ctx context.Context) (*types.Manag
 	}
 
 	return mccr.ResourcePool, nil
+}
+
+func (i *vSphereInstanceManager) findBaseVMAndSnapshot(ctx context.Context, name string) (*object.VirtualMachine, types.VirtualMachineSnapshotTree, error) {
+	client, err := i.client(ctx)
+	if err != nil {
+		return nil, types.VirtualMachineSnapshotTree{}, err
+	}
+
+	searchIndex := object.NewSearchIndex(client.Client)
+
+	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.BasePath+name)
+	if err != nil {
+		return nil, types.VirtualMachineSnapshotTree{}, err
+	}
+
+	if vmRef == nil {
+		return nil, types.VirtualMachineSnapshotTree{}, BaseVirtualMachineNotFoundError{Path: i.paths.BasePath, Name: name}
+	}
+
+	vm, ok := vmRef.(*object.VirtualMachine)
+	if !ok {
+		return nil, types.VirtualMachineSnapshotTree{}, fmt.Errorf("base VM %s is a %T, but expected VirtualMachine", name, vmRef)
+	}
+
+	var mvm mo.VirtualMachine
+	err = vm.Properties(ctx, vm.Reference(), []string{"snapshot"}, &mvm)
+	if err != nil {
+		return nil, types.VirtualMachineSnapshotTree{}, fmt.Errorf("couldn't get snapshot info for base VM: %s", err)
+	}
+
+	if mvm.Snapshot == nil {
+		return nil, types.VirtualMachineSnapshotTree{}, fmt.Errorf("invalid base VM (no snapshot)")
+	}
+
+	snapshotTree, ok := i.findSnapshot(mvm.Snapshot.RootSnapshotList, "base")
+	if !ok {
+		return nil, types.VirtualMachineSnapshotTree{}, fmt.Errorf("invalid base VM (no snapshot named 'base')")
+	}
+
+	return vm, snapshotTree, nil
 }
 
 func (i *vSphereInstanceManager) findSnapshot(roots []types.VirtualMachineSnapshotTree, name string) (types.VirtualMachineSnapshotTree, bool) {
