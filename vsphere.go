@@ -199,10 +199,9 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 		return err
 	}
 
-	err = task.Wait(ctx)
-	if err != nil {
-		return err
-	}
+	// Ignore error since the VM may already be powered off. vm.Destroy will fail
+	// if the VM is still powered on.
+	_ = task.Wait(ctx)
 
 	task, err = vm.Destroy(ctx)
 	if err != nil {
