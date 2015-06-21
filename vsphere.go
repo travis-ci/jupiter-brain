@@ -10,6 +10,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
@@ -247,7 +248,14 @@ func (i *vSphereInstanceManager) client(ctx context.Context) (*govmomi.Client, e
 }
 
 func (i *vSphereInstanceManager) createClient(ctx context.Context) (*govmomi.Client, error) {
-	return govmomi.NewClient(ctx, i.vSphereURL, true)
+	client, err := govmomi.NewClient(ctx, i.vSphereURL, true)
+	if err != nil {
+		return nil, err
+	}
+
+	client.Client.RoundTripper = vim25.Retry(client.Client.RoundTripper, vim25.TemporaryNetworkError(3))
+
+	return client, nil
 }
 
 func (i *vSphereInstanceManager) vmFolder(ctx context.Context) (*object.Folder, error) {
