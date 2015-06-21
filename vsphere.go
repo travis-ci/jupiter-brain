@@ -216,7 +216,7 @@ func (i *vSphereInstanceManager) client(ctx context.Context) (*govmomi.Client, e
 	defer i.vSphereClientMutex.Unlock()
 
 	if i.vSphereClient == nil {
-		client, err := govmomi.NewClient(ctx, i.vSphereURL, true)
+		client, err := i.createClient(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't create vSphere client: %s", err)
 		}
@@ -227,7 +227,7 @@ func (i *vSphereInstanceManager) client(ctx context.Context) (*govmomi.Client, e
 
 	active, err := i.vSphereClient.SessionManager.SessionIsActive(ctx)
 	if err != nil {
-		client, err := govmomi.NewClient(ctx, i.vSphereURL, true)
+		client, err := i.createClient(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't create vSphere client: %s", err)
 		}
@@ -244,6 +244,10 @@ func (i *vSphereInstanceManager) client(ctx context.Context) (*govmomi.Client, e
 	}
 
 	return i.vSphereClient, nil
+}
+
+func (i *vSphereInstanceManager) createClient(ctx context.Context) (*govmomi.Client, error) {
+	return govmomi.NewClient(ctx, i.vSphereURL, true)
 }
 
 func (i *vSphereInstanceManager) vmFolder(ctx context.Context) (*object.Folder, error) {
