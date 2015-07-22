@@ -132,7 +132,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	cloneSpec := types.VirtualMachineCloneSpec{
 		Location: relocateSpec,
-		PowerOn:  true,
+		PowerOn:  false,
 		Template: false,
 		Snapshot: &snapshotTree.Snapshot,
 	}
@@ -169,7 +169,19 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		return nil, fmt.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
 	}
 
-	return i.instanceForVirtualMachine(ctx, object.NewVirtualMachine(client.Client, vmManagedRef))
+	newVM := object.NewVirtualMachine(client.Client, vmManagedRef)
+
+	task, err = newVM.PowerOn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = task.Wait(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return i.instanceForVirtualMachine(ctx, newVM)
 }
 
 func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error {
