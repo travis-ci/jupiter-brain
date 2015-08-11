@@ -143,7 +143,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		return nil, err
 	}
 
-	task, err := vm.Clone(ctx, vmFolder, name, cloneSpec)
+	task, err := vm.Clone(ctx, vmFolder, name.String(), cloneSpec)
 	if err != nil {
 		return nil, err
 	}
