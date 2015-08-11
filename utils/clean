@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -e
+
+cd $(dirname $(dirname ${BASH_SOURCE[0]}))
+rm -vf "./bin/jb-server"
+rm -vf coverage.html *coverage.coverprofile
+find pkg -wholename '*travis-ci/jupiter-brain*.a' | xargs rm -vf
