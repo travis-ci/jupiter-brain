@@ -6,26 +6,6 @@ env:
   global:
   - UNAME="$(uname | tr '[:upper:]' '[:lower:]')"
 
-before_install:
-- go get github.com/hamfist/deppy
-- go get github.com/golang/lint/golint
-- go get golang.org/x/tools/cmd/cover
-
-install:
-- deppy restore
-
-script:
-- make test
-- make save
-- git diff --exit-code
-- git diff --cached --exit-code
-
-after_success:
-- bin/atlas-push
-- mkdir -p build/$UNAME/amd64
-- cp -v ${GOPATH%%:*}/bin/jb-server ./build/$UNAME/amd64/jb-server
-- echo $ARTIFACTS_PATHS
-
 addons:
   artifacts:
     paths:
@@ -34,3 +14,20 @@ addons:
     - 'travis-ci/jupiter-brain/$TRAVIS_BUILD_NUMBER/$TRAVIS_JOB_NUMBER'
     - 'travis-ci/jupiter-brain/$(git describe --always --dirty --tags)'
     - 'travis-ci/jupiter-brain/$TRAVIS_BRANCH'
+
+before_install:
+- go get github.com/constabulary/gb/...
+- go get github.com/alecthomas/gometalinter/...
+- gometalinter --install --update
+
+script:
+- make lintall
+- make test
+- git diff --exit-code
+- git diff --cached --exit-code
+
+after_success:
+- bin/atlas-push
+- mkdir -p build/$UNAME/amd64
+- cp -v ${GOPATH%%:*}/bin/jb-server ./build/$UNAME/amd64/jb-server
+- echo $ARTIFACTS_PATHS

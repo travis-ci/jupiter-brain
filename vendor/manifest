@@ -1,0 +1,72 @@
+{
+	"version": 0,
+	"dependencies": [
+		{
+			"importpath": "github.com/Sirupsen/logrus",
+			"repository": "https://github.com/Sirupsen/logrus",
+			"revision": "3fc34d061b9c78a70db853c7cb6b0576b6d4f32d",
+			"branch": "HEAD"
+		},
+		{
+			"importpath": "github.com/braintree/manners",
+			"repository": "https://github.com/braintree/manners",
+			"revision": "5280e250f2795914acbeb2bf3b55dd5a2d1fba52",
+			"branch": "HEAD"
+		},
+		{
+			"importpath": "github.com/codegangsta/cli",
+			"repository": "https://github.com/codegangsta/cli",
+			"revision": "2bcd11f863d540a1b190dc03b6c4f634c6ae91d4",
+			"branch": "HEAD"
+		},
+		{
+			"importpath": "github.com/codegangsta/negroni",
+			"repository": "https://github.com/codegangsta/negroni",
+			"revision": "c7477ad8e330bef55bf1ebe300cf8aa67c492d1b",
+			"branch": "HEAD"
+		},
+		{
+			"importpath": "github.com/getsentry/raven-go",
+			"repository": "https://github.com/getsentry/raven-go",
+			"revision": "3fd636ed242c26c0f55bc9ee1fe47e1d6d2d77f7",
+			"branch": "HEAD"
+		},
+		{
+			"importpath": "github.com/gorilla/context",
+			"repository": "https://github.com/gorilla/context",
+			"revision": "215affda49addc4c8ef7e2534915df2c8c35c6cd",
+			"branch": "HEAD"
+		},
+		{
+			"importpath": "github.com/gorilla/mux",
+			"repository": "https://github.com/gorilla/mux",
+			"revision": "8096f47503459bcc74d1f4c487b7e6e42e5746b5",
+			"branch": "HEAD"
+		},
+		{
+			"importpath": "github.com/meatballhat/negroni-logrus",
+			"repository": "https://github.com/meatballhat/negroni-logrus",
+			"revision": "d5e114d7a445f7a3652cf807d3f83d5dceb8de26",
+			"branch": "HEAD"
+		},
+		{
+			"importpath": "github.com/vmware/govmomi",
+			"repository": "https://github.com/vmware/govmomi",
+			"revision": "db50806964c43230e0f61a2cb9104c7bed497628",
+			"branch": "HEAD"
+		},
+		{
+			"importpath": "golang.org/x/net/context",
+			"repository": "https://go.googlesource.com/net",
+			"revision": "7dbad50ab5b31073856416cdcfeb2796d682f844",
+			"branch": "HEAD",
+			"path": "/context"
+		},
+		{
+			"importpath": "github.com/pborman/uuid",
+			"repository": "https://github.com/pborman/uuid",
+			"revision": "ca53cad383cad2479bbba7f7a1a05797ec1386e4",
+			"branch": "master"
+		}
+	]
+}
