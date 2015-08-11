@@ -136,7 +136,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		Snapshot: &snapshotTree.Snapshot,
 	}
 
-	name := uuid.New()
+	name := uuid.NewRandom()
 
 	vmFolder, err := i.vmFolder(ctx)
 	if err != nil {
