@@ -23,6 +23,7 @@ before_install:
 script:
 - make lintall
 - make test
+- make test-race
 - git diff --exit-code
 - git diff --cached --exit-code
 
