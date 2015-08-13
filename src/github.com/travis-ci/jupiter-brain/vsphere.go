@@ -3,6 +3,7 @@ package jupiterbrain
 import (
 	"fmt"
 	"net/url"
+	"reflect"
 	"sync"
 
 	"github.com/Sirupsen/logrus"
@@ -391,6 +392,10 @@ func (i *vSphereInstanceManager) instanceForVirtualMachine(ctx context.Context, 
 		for _, ip := range nic.IpConfig.IpAddress {
 			ipAddresses = append(ipAddresses, ip.IpAddress)
 		}
+	}
+
+	if reflect.DeepEqual(mvm.Runtime, types.VirtualMachineRuntimeInfo{}) {
+		return nil, fmt.Errorf("no instance for vm %v", vm)
 	}
 
 	return &Instance{

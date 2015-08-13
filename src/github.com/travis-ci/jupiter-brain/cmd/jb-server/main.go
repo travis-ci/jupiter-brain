@@ -53,6 +53,11 @@ func main() {
 			Usage:  "path to compute cluster that VMs will be booted in",
 			EnvVar: "JUPITER_BRAIN_VSPHERE_CLUSTER_PATH",
 		},
+		cli.StringFlag{
+			Name:   "database-url",
+			Usage:  "URL to the PostgreSQL database",
+			EnvVar: "JUPITER_BRAIN_DATABASE_URL,DATABASE_URL",
+		},
 		cli.BoolFlag{
 			Name:   "debug",
 			Usage:  "enable debug logging",
@@ -82,5 +87,7 @@ func runServer(c *cli.Context) {
 		VSphereBasePath:    c.String("vsphere-base-path"),
 		VSphereVMPath:      c.String("vsphere-vm-path"),
 		VSphereClusterPath: c.String("vsphere-cluster-path"),
+
+		DatabaseURL: c.String("database-url"),
 	})
 }
