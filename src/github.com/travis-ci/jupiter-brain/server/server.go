@@ -136,6 +136,7 @@ func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request)
 	}
 
 	dbInstanceIDs := []string{}
+	dbInstanceIDCreatedMap := map[string]time.Time{}
 	applyDBFilter := false
 
 	if req.FormValue("min_age") != "" {
@@ -156,6 +157,7 @@ func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request)
 		}).Debug("retrieved instances from database")
 
 		for _, r := range res {
+			dbInstanceIDCreatedMap[r.ID] = r.CreatedAt
 			dbInstanceIDs = append(dbInstanceIDs, r.ID)
 		}
 
@@ -171,10 +173,16 @@ func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request)
 		for _, instance := range instances {
 			for _, instID := range dbInstanceIDs {
 				if instID == instance.ID {
+					instance.CreatedAt = dbInstanceIDCreatedMap[instID]
 					keptInstances = append(keptInstances, instance)
 				}
 			}
 		}
+
+		srv.log.WithFields(logrus.Fields{
+			"pre_filter":  len(instances),
+			"post_filter": len(keptInstances),
+		}).Debug("applying known instance filter")
 
 		instances = keptInstances
 	}
