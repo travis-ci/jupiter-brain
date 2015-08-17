@@ -152,7 +152,7 @@ func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request)
 		}
 
 		srv.log.WithFields(logrus.Fields{
-			"instances": res,
+			"n": len(res),
 		}).Debug("retrieved instances from database")
 
 		for _, r := range res {

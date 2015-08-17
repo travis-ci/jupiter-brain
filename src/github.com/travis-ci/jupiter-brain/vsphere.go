@@ -380,9 +380,17 @@ func (i *vSphereInstanceManager) findSnapshot(roots []types.VirtualMachineSnapsh
 	return types.VirtualMachineSnapshotTree{}, false
 }
 
-func (i *vSphereInstanceManager) instanceForVirtualMachine(ctx context.Context, vm *object.VirtualMachine) (*Instance, error) {
+func (i *vSphereInstanceManager) instanceForVirtualMachine(ctx context.Context, vm *object.VirtualMachine) (inst *Instance, err error) {
+	defer func() {
+		recoverErr := recover()
+		if recoverErr != nil {
+			inst = nil
+			err = recoverErr.(error)
+		}
+	}()
+
 	var mvm mo.VirtualMachine
-	err := vm.Properties(ctx, vm.Reference(), []string{"config", "guest", "runtime"}, &mvm)
+	err = vm.Properties(ctx, vm.Reference(), []string{"config", "guest", "runtime"}, &mvm)
 	if err != nil {
 		return nil, err
 	}
