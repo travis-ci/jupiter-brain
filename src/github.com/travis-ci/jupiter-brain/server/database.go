@@ -36,9 +36,7 @@ func newPGDatabase(url string) (*pgDatabase, error) {
 }
 
 func (db *pgDatabase) SaveInstance(inst *jupiterbrain.Instance) error {
-	instanceID := ""
-	err := db.conn.QueryRow(`INSERT INTO jupiter_brain.instances(id, created_at) VALUES ($1, $2) RETURNING id`,
-		inst.ID, inst.CreatedAt).Scan(&instanceID)
+	_, err := db.conn.Exec(`INSERT INTO jupiter_brain.instances(id, created_at) VALUES ($1, $2)`, inst.ID, inst.CreatedAt)
 	return err
 }
 
