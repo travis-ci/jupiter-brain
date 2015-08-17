@@ -36,8 +36,8 @@ func newPGDatabase(url string) (*pgDatabase, error) {
 }
 
 func (db *pgDatabase) SaveInstance(inst *jupiterbrain.Instance) error {
-	instanceID := 0
-	err := db.conn.QueryRow(`INSERT INTO jupiter_brain.instances(vsphere_id, created_at) VALUES ($1, $2) RETURNING id`,
+	instanceID := ""
+	err := db.conn.QueryRow(`INSERT INTO jupiter_brain.instances(id, created_at) VALUES ($1, $2) RETURNING id`,
 		inst.ID, inst.CreatedAt).Scan(&instanceID)
 	return err
 }
@@ -65,6 +65,6 @@ func (db *pgDatabase) FetchInstances(q *databaseQuery) ([]*jupiterbrain.Instance
 }
 
 func (db *pgDatabase) DestroyInstance(id string) error {
-	_, err := db.conn.Queryx(`DELETE FROM jupiter_brain.instances WHERE vsphere_id = $1`, id)
+	_, err := db.conn.Queryx(`DELETE FROM jupiter_brain.instances WHERE id = $1`, id)
 	return err
 }
