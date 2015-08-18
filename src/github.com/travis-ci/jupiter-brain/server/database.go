@@ -63,6 +63,6 @@ func (db *pgDatabase) FetchInstances(q *databaseQuery) ([]*jupiterbrain.Instance
 }
 
 func (db *pgDatabase) DestroyInstance(id string) error {
-	_, err := db.conn.Queryx(`UPDATE jupiter_brain.instances SET destroyed_at = now() WHERE id = $1`, id)
+	_, err := db.conn.Exec(`UPDATE jupiter_brain.instances SET destroyed_at = now() WHERE id = $1`, id)
 	return err
 }
