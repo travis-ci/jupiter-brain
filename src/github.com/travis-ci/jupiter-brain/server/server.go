@@ -13,12 +13,15 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/meatballhat/negroni-logrus"
 	"github.com/travis-ci/jupiter-brain"
+	"github.com/travis-ci/jupiter-brain/janitor"
 	"github.com/travis-ci/jupiter-brain/server/jsonapi"
 	"github.com/travis-ci/jupiter-brain/server/negroniraven"
 	"golang.org/x/net/context"
 )
 
 type server struct {
+	Janitor *janitor.Janitor
+
 	addr, authToken, sentryDSN string
 
 	log *logrus.Logger
@@ -51,14 +54,18 @@ func newServer(cfg *Config) (*server, error) {
 		ClusterPath: cfg.VSphereClusterPath,
 	}
 
+	im := jupiterbrain.NewVSphereInstanceManager(log, u, paths)
+
 	srv := &server{
+		Janitor: janitor.New(im, log),
+
 		addr:      cfg.Addr,
 		authToken: cfg.AuthToken,
 		sentryDSN: cfg.SentryDSN,
 
 		log: log,
 
-		i: jupiterbrain.NewVSphereInstanceManager(log, u, paths),
+		i: im,
 
 		n: negroni.New(),
 		r: mux.NewRouter(),
@@ -171,6 +178,8 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 		jsonapi.Error(w, err, http.StatusInternalServerError)
 		return
 	}
+
+	srv.Janitor.Track(instance.ID)
 
 	response := map[string][]interface{}{
 		"data": {MarshalInstance(instance)},

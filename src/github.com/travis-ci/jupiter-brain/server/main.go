@@ -12,5 +12,6 @@ func Main(cfg *Config) {
 	}
 
 	srv.Setup()
+	go srv.Janitor.Run()
 	srv.Run()
 }
