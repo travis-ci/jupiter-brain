@@ -204,6 +204,7 @@ func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request)
 
 func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Request) {
 	var requestBody map[string]map[string]string
+
 	err := json.NewDecoder(req.Body).Decode(&requestBody)
 	if err != nil {
 		jsonapi.Error(w, err, http.StatusBadRequest)
@@ -231,9 +232,17 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	recoverDelete := false
+	defer func() {
+		if recoverDelete && instance != nil {
+			go func() { _ = srv.i.Terminate(context.TODO(), instance.ID) }()
+		}
+	}()
+
 	instance.CreatedAt = time.Now().UTC()
 	err = srv.db.SaveInstance(instance)
 	if err != nil {
+		recoverDelete = true
 		jsonapi.Error(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -244,6 +253,7 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 
 	b, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
+		recoverDelete = true
 		jsonapi.Error(w, err, http.StatusInternalServerError)
 		return
 	}
