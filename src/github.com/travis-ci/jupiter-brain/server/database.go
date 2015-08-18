@@ -42,7 +42,7 @@ func (db *pgDatabase) SaveInstance(inst *jupiterbrain.Instance) error {
 
 func (db *pgDatabase) FetchInstances(q *databaseQuery) ([]*jupiterbrain.Instance, error) {
 	instances := []*jupiterbrain.Instance{}
-	rows, err := db.conn.Queryx(`SELECT * FROM jupiter_brain.instances WHERE ((now() AT TIME ZONE 'UTC') - created_at) >= $1::interval`, q.MinAge.String())
+	rows, err := db.conn.Queryx(`SELECT * FROM jupiter_brain.instances WHERE destroyed_at IS NULL AND ((now() AT TIME ZONE 'UTC') - created_at) >= $1::interval`, q.MinAge.String())
 	if err != nil {
 		return instances, err
 	}
@@ -63,6 +63,6 @@ func (db *pgDatabase) FetchInstances(q *databaseQuery) ([]*jupiterbrain.Instance
 }
 
 func (db *pgDatabase) DestroyInstance(id string) error {
-	_, err := db.conn.Queryx(`DELETE FROM jupiter_brain.instances WHERE id = $1`, id)
+	_, err := db.conn.Queryx(`UPDATE jupiter_brain.instances SET destroyed_at = now() WHERE id = $1`, id)
 	return err
 }
