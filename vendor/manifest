@@ -67,6 +67,18 @@
 			"repository": "https://github.com/pborman/uuid",
 			"revision": "ca53cad383cad2479bbba7f7a1a05797ec1386e4",
 			"branch": "master"
+		},
+		{
+			"importpath": "github.com/lib/pq",
+			"repository": "https://github.com/lib/pq",
+			"revision": "b269bd035a727d6c1081f76e7a239a1b00674c40",
+			"branch": "master"
+		},
+		{
+			"importpath": "github.com/jmoiron/sqlx",
+			"repository": "https://github.com/jmoiron/sqlx",
+			"revision": "344b1e96d6e410a093b7bce40287731a49e253f6",
+			"branch": "master"
 		}
 	]
 }
