@@ -39,6 +39,8 @@ func newServer(cfg *Config) (*server, error) {
 		log.Level = logrus.DebugLevel
 	}
 
+	log.Formatter = &logrus.TextFormatter{DisableColors: true}
+
 	u, err := url.Parse(cfg.VSphereURL)
 	if err != nil {
 		return nil, err
@@ -98,7 +100,7 @@ func (srv *server) setupRoutes() {
 
 func (srv *server) setupMiddleware() {
 	srv.n.Use(negroni.NewRecovery())
-	srv.n.Use(negronilogrus.NewMiddleware())
+	srv.n.Use(negronilogrus.NewCustomMiddleware(srv.log.Level, srv.log.Formatter, "web"))
 	srv.n.Use(negroni.HandlerFunc(srv.authMiddleware))
 	nr, err := negroniraven.NewMiddleware(srv.sentryDSN)
 	if err != nil {
