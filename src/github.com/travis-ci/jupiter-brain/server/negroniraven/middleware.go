@@ -20,7 +20,9 @@ func NewMiddleware(sentryDSN string) (*Middleware, error) {
 		return nil, err
 	}
 
-	return &Middleware{cl: cl, log: logrus.New()}, nil
+	log := logrus.New()
+	log.Formatter = &logrus.TextFormatter{DisableColors: true}
+	return &Middleware{cl: cl, log: log}, nil
 }
 
 func (mw *Middleware) ServeHTTP(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
