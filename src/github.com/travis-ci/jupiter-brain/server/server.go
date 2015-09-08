@@ -4,8 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -30,7 +34,8 @@ type server struct {
 	r *mux.Router
 	s *manners.GracefulServer
 
-	db database
+	db       database
+	bootTime time.Time
 }
 
 func newServer(cfg *Config) (*server, error) {
@@ -74,7 +79,8 @@ func newServer(cfg *Config) (*server, error) {
 		r: mux.NewRouter(),
 		s: manners.NewServer(),
 
-		db: db,
+		db:       db,
+		bootTime: time.Now().UTC(),
 	}
 
 	return srv, nil
@@ -83,6 +89,7 @@ func newServer(cfg *Config) (*server, error) {
 func (srv *server) Setup() {
 	srv.setupRoutes()
 	srv.setupMiddleware()
+	go srv.signalHandler()
 }
 
 func (srv *server) Run() {
@@ -348,4 +355,33 @@ func (srv *server) handleInstanceSync(w http.ResponseWriter, req *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (srv *server) signalHandler() {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
+	for {
+		select {
+		case sig := <-signalChan:
+			switch sig {
+			case syscall.SIGTERM:
+				srv.log.Info("Received SIGTERM, shutting down now.")
+				os.Exit(0)
+			case syscall.SIGINT:
+				srv.log.Info("Received SIGINT, shutting down now.")
+				os.Exit(0)
+			case syscall.SIGUSR1:
+				srv.log.WithFields(logrus.Fields{
+					"version":   os.Getenv("VERSION"),
+					"revision":  os.Getenv("REVISION"),
+					"boot_time": srv.bootTime,
+					"uptime":    time.Since(srv.bootTime),
+				}).Info("Received SIGUSR1.")
+			default:
+				log.Print("ignoring unknown signal")
+			}
+		default:
+			time.Sleep(time.Second)
+		}
+	}
 }
