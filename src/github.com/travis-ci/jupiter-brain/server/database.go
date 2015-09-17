@@ -10,6 +10,8 @@ import (
 	"github.com/travis-ci/jupiter-brain"
 )
 
+const maxOpenDatabaseConnections = 20
+
 type database interface {
 	SaveInstance(*jupiterbrain.Instance) error
 	DestroyInstance(string) error
@@ -29,6 +31,8 @@ func newPGDatabase(url string) (*pgDatabase, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	conn.DB.SetMaxOpenConns(maxOpenDatabaseConnections)
 
 	return &pgDatabase{
 		conn: conn,
