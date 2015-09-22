@@ -3,6 +3,7 @@ package jupiterbrain
 import (
 	"fmt"
 	"net/url"
+	"reflect"
 	"sync"
 
 	"github.com/Sirupsen/logrus"
@@ -161,26 +162,31 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	task, err := vm.Clone(ctx, vmFolder, name.String(), cloneSpec)
 	if err != nil {
+		go i.terminateIfExists(ctx, name.String())
 		return nil, err
 	}
 
 	err = task.Wait(ctx)
 	if err != nil {
+		go i.terminateIfExists(ctx, name.String())
 		return nil, err
 	}
 
 	var mt mo.Task
 	err = task.Properties(ctx, task.Reference(), []string{"info"}, &mt)
 	if err != nil {
+		go i.terminateIfExists(ctx, name.String())
 		return nil, err
 	}
 
 	if mt.Info.Result == nil {
+		go i.terminateIfExists(ctx, name.String())
 		return nil, fmt.Errorf("expected VM, but got nil")
 	}
 
 	vmManagedRef, ok := mt.Info.Result.(types.ManagedObjectReference)
 	if !ok {
+		go i.terminateIfExists(ctx, name.String())
 		return nil, fmt.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
 	}
 
@@ -188,11 +194,13 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	task, err = newVM.PowerOn(ctx)
 	if err != nil {
+		go i.terminateIfExists(ctx, name.String())
 		return nil, err
 	}
 
 	err = task.Wait(ctx)
 	if err != nil {
+		go i.terminateIfExists(ctx, name.String())
 		return nil, err
 	}
 
@@ -236,6 +244,16 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 	}
 
 	return task.Wait(ctx)
+}
+
+// Terminate the VM if it exists
+func (i *vSphereInstanceManager) terminateIfExists(ctx context.Context, name string) {
+	_, err := i.Fetch(ctx, name)
+	if _, ok := err.(VirtualMachineNotFoundError); ok {
+		return
+	}
+
+	i.Terminate(ctx, name)
 }
 
 func (i *vSphereInstanceManager) client(ctx context.Context) (*govmomi.Client, error) {
@@ -405,9 +423,17 @@ func (i *vSphereInstanceManager) findSnapshot(roots []types.VirtualMachineSnapsh
 	return types.VirtualMachineSnapshotTree{}, false
 }
 
-func (i *vSphereInstanceManager) instanceForVirtualMachine(ctx context.Context, vm *object.VirtualMachine) (*Instance, error) {
+func (i *vSphereInstanceManager) instanceForVirtualMachine(ctx context.Context, vm *object.VirtualMachine) (inst *Instance, err error) {
+	defer func() {
+		recoverErr := recover()
+		if recoverErr != nil {
+			inst = nil
+			err = recoverErr.(error)
+		}
+	}()
+
 	var mvm mo.VirtualMachine
-	err := vm.Properties(ctx, vm.Reference(), []string{"config", "guest", "runtime"}, &mvm)
+	err = vm.Properties(ctx, vm.Reference(), []string{"config", "guest", "runtime"}, &mvm)
 	if err != nil {
 		return nil, err
 	}
@@ -417,6 +443,10 @@ func (i *vSphereInstanceManager) instanceForVirtualMachine(ctx context.Context, 
 		for _, ip := range nic.IpConfig.IpAddress {
 			ipAddresses = append(ipAddresses, ip.IpAddress)
 		}
+	}
+
+	if reflect.DeepEqual(mvm.Runtime, types.VirtualMachineRuntimeInfo{}) {
+		return nil, fmt.Errorf("no instance for vm %v", vm)
 	}
 
 	return &Instance{

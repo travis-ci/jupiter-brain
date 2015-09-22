@@ -4,8 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/braintree/manners"
@@ -28,6 +33,9 @@ type server struct {
 	n *negroni.Negroni
 	r *mux.Router
 	s *manners.GracefulServer
+
+	db       database
+	bootTime time.Time
 }
 
 func newServer(cfg *Config) (*server, error) {
@@ -36,6 +44,8 @@ func newServer(cfg *Config) (*server, error) {
 		log.Level = logrus.DebugLevel
 	}
 
+	log.Formatter = &logrus.TextFormatter{DisableColors: true}
+
 	u, err := url.Parse(cfg.VSphereURL)
 	if err != nil {
 		return nil, err
@@ -43,6 +53,11 @@ func newServer(cfg *Config) (*server, error) {
 
 	if !u.IsAbs() {
 		return nil, fmt.Errorf("vSphere API URL must be absolute")
+	}
+
+	db, err := newPGDatabase(cfg.DatabaseURL)
+	if err != nil {
+		return nil, err
 	}
 
 	paths := jupiterbrain.VSpherePaths{
@@ -63,6 +78,9 @@ func newServer(cfg *Config) (*server, error) {
 		n: negroni.New(),
 		r: mux.NewRouter(),
 		s: manners.NewServer(),
+
+		db:       db,
+		bootTime: time.Now().UTC(),
 	}
 
 	return srv, nil
@@ -71,6 +89,7 @@ func newServer(cfg *Config) (*server, error) {
 func (srv *server) Setup() {
 	srv.setupRoutes()
 	srv.setupMiddleware()
+	go srv.signalHandler()
 }
 
 func (srv *server) Run() {
@@ -83,11 +102,12 @@ func (srv *server) setupRoutes() {
 	srv.r.HandleFunc(`/instances`, srv.handleInstancesCreate).Methods("POST").Name("instances-create")
 	srv.r.HandleFunc(`/instances/{id}`, srv.handleInstanceByIDFetch).Methods("GET").Name("instance-by-id")
 	srv.r.HandleFunc(`/instances/{id}`, srv.handleInstanceByIDTerminate).Methods("DELETE").Name("instance-by-id-terminate")
+	srv.r.HandleFunc(`/instance-syncs`, srv.handleInstanceSync).Methods("POST").Name("instance-syncs-create")
 }
 
 func (srv *server) setupMiddleware() {
 	srv.n.Use(negroni.NewRecovery())
-	srv.n.Use(negronilogrus.NewMiddleware())
+	srv.n.Use(negronilogrus.NewCustomMiddleware(srv.log.Level, srv.log.Formatter, "web"))
 	srv.n.Use(negroni.HandlerFunc(srv.authMiddleware))
 	nr, err := negroniraven.NewMiddleware(srv.sentryDSN)
 	if err != nil {
@@ -124,8 +144,56 @@ func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	dbInstanceIDs := []string{}
+	dbInstanceIDCreatedMap := map[string]time.Time{}
+	applyDBFilter := false
+
+	if req.FormValue("min_age") != "" {
+		dur, err := time.ParseDuration(req.FormValue("min_age"))
+		if err != nil {
+			jsonapi.Error(w, err, http.StatusBadRequest)
+			return
+		}
+
+		res, err := srv.db.FetchInstances(&databaseQuery{MinAge: dur})
+		if err != nil {
+			jsonapi.Error(w, err, http.StatusBadRequest)
+			return
+		}
+
+		srv.log.WithFields(logrus.Fields{
+			"n": len(res),
+		}).Debug("retrieved instances from database")
+
+		for _, r := range res {
+			dbInstanceIDCreatedMap[r.ID] = r.CreatedAt
+			dbInstanceIDs = append(dbInstanceIDs, r.ID)
+		}
+
+		applyDBFilter = true
+	}
+
 	response := map[string][]interface{}{
 		"data": make([]interface{}, 0),
+	}
+
+	if applyDBFilter {
+		keptInstances := []*jupiterbrain.Instance{}
+		for _, instance := range instances {
+			for _, instID := range dbInstanceIDs {
+				if instID == instance.ID {
+					instance.CreatedAt = dbInstanceIDCreatedMap[instID]
+					keptInstances = append(keptInstances, instance)
+				}
+			}
+		}
+
+		srv.log.WithFields(logrus.Fields{
+			"pre_filter":  len(instances),
+			"post_filter": len(keptInstances),
+		}).Debug("applying known instance filter")
+
+		instances = keptInstances
 	}
 
 	for _, instance := range instances {
@@ -145,6 +213,7 @@ func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request)
 
 func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Request) {
 	var requestBody map[string]map[string]string
+
 	err := json.NewDecoder(req.Body).Decode(&requestBody)
 	if err != nil {
 		jsonapi.Error(w, err, http.StatusBadRequest)
@@ -172,12 +241,28 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	recoverDelete := false
+	defer func() {
+		if recoverDelete && instance != nil {
+			go func() { _ = srv.i.Terminate(context.TODO(), instance.ID) }()
+		}
+	}()
+
+	instance.CreatedAt = time.Now().UTC()
+	err = srv.db.SaveInstance(instance)
+	if err != nil {
+		recoverDelete = true
+		jsonapi.Error(w, err, http.StatusInternalServerError)
+		return
+	}
+
 	response := map[string][]interface{}{
 		"data": {MarshalInstance(instance)},
 	}
 
 	b, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
+		recoverDelete = true
 		jsonapi.Error(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -239,6 +324,64 @@ func (srv *server) handleInstanceByIDTerminate(w http.ResponseWriter, req *http.
 		}
 	}
 
+	err = srv.db.DestroyInstance(vars["id"])
+	if err != nil {
+		jsonapi.Error(w, err, http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
-	return
+}
+
+func (srv *server) handleInstanceSync(w http.ResponseWriter, req *http.Request) {
+	instances, err := srv.i.List(context.TODO())
+	if err != nil {
+		jsonapi.Error(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	for _, instance := range instances {
+		instance.CreatedAt = time.Now().UTC()
+		err = srv.db.SaveInstance(instance)
+		if err != nil {
+			srv.log.WithFields(logrus.Fields{
+				"err": err,
+				"id":  instance.ID,
+			}).Warn("failed to save instance")
+			continue
+		}
+
+		srv.log.WithField("id", instance.ID).Debug("synced instance")
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (srv *server) signalHandler() {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
+	for {
+		select {
+		case sig := <-signalChan:
+			switch sig {
+			case syscall.SIGTERM:
+				srv.log.Info("Received SIGTERM, shutting down now.")
+				os.Exit(0)
+			case syscall.SIGINT:
+				srv.log.Info("Received SIGINT, shutting down now.")
+				os.Exit(0)
+			case syscall.SIGUSR1:
+				srv.log.WithFields(logrus.Fields{
+					"version":   os.Getenv("VERSION"),
+					"revision":  os.Getenv("REVISION"),
+					"boot_time": srv.bootTime,
+					"uptime":    time.Since(srv.bootTime),
+				}).Info("Received SIGUSR1.")
+			default:
+				log.Print("ignoring unknown signal")
+			}
+		default:
+			time.Sleep(time.Second)
+		}
+	}
 }

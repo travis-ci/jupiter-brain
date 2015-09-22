@@ -73,6 +73,18 @@
 			"revision": "7dbad50ab5b31073856416cdcfeb2796d682f844",
 			"branch": "HEAD",
 			"path": "/context"
+		},
+		{
+			"importpath": "github.com/lib/pq",
+			"repository": "https://github.com/lib/pq",
+			"revision": "b269bd035a727d6c1081f76e7a239a1b00674c40",
+			"branch": "master"
+		},
+		{
+			"importpath": "github.com/jmoiron/sqlx",
+			"repository": "https://github.com/jmoiron/sqlx",
+			"revision": "344b1e96d6e410a093b7bce40287731a49e253f6",
+			"branch": "master"
 		}
 	]
 }

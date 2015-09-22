@@ -24,4 +24,7 @@ type Config struct {
 	// SentryDSN is used to send errors to Sentry. Leave this blank to not
 	// send errors.
 	SentryDSN string
+
+	// DatabaseURL is the PostgreSQL database URL wow!
+	DatabaseURL string
 }
