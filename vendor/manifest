@@ -50,6 +50,18 @@
 			"branch": "HEAD"
 		},
 		{
+			"importpath": "github.com/pborman/uuid",
+			"repository": "https://github.com/pborman/uuid",
+			"revision": "ca53cad383cad2479bbba7f7a1a05797ec1386e4",
+			"branch": "master"
+		},
+		{
+			"importpath": "github.com/sony/gobreaker",
+			"repository": "https://github.com/sony/gobreaker",
+			"revision": "fbf121b75055635e23032f4421865db5414d1d17",
+			"branch": "master"
+		},
+		{
 			"importpath": "github.com/vmware/govmomi",
 			"repository": "https://github.com/vmware/govmomi",
 			"revision": "db50806964c43230e0f61a2cb9104c7bed497628",
@@ -61,12 +73,6 @@
 			"revision": "7dbad50ab5b31073856416cdcfeb2796d682f844",
 			"branch": "HEAD",
 			"path": "/context"
-		},
-		{
-			"importpath": "github.com/pborman/uuid",
-			"repository": "https://github.com/pborman/uuid",
-			"revision": "ca53cad383cad2479bbba7f7a1a05797ec1386e4",
-			"branch": "master"
 		},
 		{
 			"importpath": "github.com/lib/pq",

@@ -8,10 +8,12 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
+	"github.com/sony/gobreaker"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/mo"
+	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
 )
@@ -25,6 +27,20 @@ type vSphereInstanceManager struct {
 	vSphereURL *url.URL
 
 	paths VSpherePaths
+}
+
+type soapBreakerRoundTripper struct {
+	rt soap.RoundTripper
+	cb *gobreaker.CircuitBreaker
+}
+
+func (rt *soapBreakerRoundTripper) RoundTrip(ctx context.Context, req, res soap.HasFault) error {
+	_, err := rt.cb.Execute(func() (interface{}, error) {
+		err := rt.rt.RoundTrip(ctx, req, res)
+		return nil, err
+	})
+
+	return err
 }
 
 // VSpherePaths holds some vSphere inventory paths that are required for the
@@ -282,6 +298,16 @@ func (i *vSphereInstanceManager) createClient(ctx context.Context) (*govmomi.Cli
 	}
 
 	client.Client.RoundTripper = vim25.Retry(client.Client.RoundTripper, vim25.TemporaryNetworkError(3))
+	client.Client.RoundTripper = &soapBreakerRoundTripper{
+		rt: client.Client.RoundTripper,
+		cb: gobreaker.NewCircuitBreaker(gobreaker.Settings{
+			Name: "vSphere govmomi",
+			ReadyToTrip: func(counts gobreaker.Counts) bool {
+				failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
+				return counts.Requests >= 3 && failureRatio >= 0.6
+			},
+		}),
+	}
 
 	return client, nil
 }
