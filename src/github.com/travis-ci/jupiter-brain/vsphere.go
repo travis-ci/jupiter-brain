@@ -308,6 +308,22 @@ func (i *vSphereInstanceManager) createClient(ctx context.Context) (*govmomi.Cli
 				failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
 				return counts.Requests >= 5 && failureRatio >= 0.6
 			},
+			OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
+				stateToString := func(state gobreaker.State) string {
+					switch state {
+					case gobreaker.StateClosed:
+						return "closed"
+					case gobreaker.StateHalfOpen:
+						return "half-open"
+					case gobreaker.StateOpen:
+						return "open"
+					default:
+						return "unknown"
+					}
+				}
+
+				i.log.WithField("state_from", stateToString(from)).WithField("state_to", stateToString(to)).Info("circuit breaker state changed")
+			},
 		}),
 	}
 
