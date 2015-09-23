@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
@@ -301,10 +302,11 @@ func (i *vSphereInstanceManager) createClient(ctx context.Context) (*govmomi.Cli
 	client.Client.RoundTripper = &soapBreakerRoundTripper{
 		rt: client.Client.RoundTripper,
 		cb: gobreaker.NewCircuitBreaker(gobreaker.Settings{
-			Name: "vSphere govmomi",
+			Name:     "vSphere govmomi",
+			Interval: 10 * time.Minute,
 			ReadyToTrip: func(counts gobreaker.Counts) bool {
 				failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
-				return counts.Requests >= 3 && failureRatio >= 0.6
+				return counts.Requests >= 5 && failureRatio >= 0.6
 			},
 		}),
 	}
