@@ -1,6 +1,5 @@
 PACKAGE := github.com/travis-ci/jupiter-brain
-PACKAGE_SRC_DIR := src/$(PACKAGE)
-ALL_PACKAGES := $(shell utils/list-packages)
+ALL_PACKAGES := $(shell utils/list-packages) $(PACKAGE)/cmd/...
 
 VERSION_VAR := main.VersionString
 VERSION_VALUE ?= $(shell git describe --always --dirty 2> /dev/null)
@@ -10,13 +9,15 @@ GENERATED_VAR := main.GeneratedString
 GENERATED_VALUE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%S%z')
 
 GO ?= go
-GB ?= gb
-GOPATH := $(PWD):$(PWD)/vendor:$(shell echo $${GOPATH%%:*})
-GOBUILD_LDFLAGS ?= -ldflags "\
+GVT ?= gvt
+GOPATH := $(shell echo $${GOPATH%%:*})
+GOBUILD_LDFLAGS ?= -x -ldflags "\
 	-X $(VERSION_VAR) '$(VERSION_VALUE)' \
 	-X $(REV_VAR) $(REV_VALUE) \
 	-X $(GENERATED_VAR) '$(GENERATED_VALUE)' \
 "
+
+export GO15VENDOREXPERIMENT
 
 COVERPROFILES := \
 	server-coverage.coverprofile \
@@ -36,14 +37,14 @@ export PORT
 all: clean test
 
 .PHONY: test
-test: lintall build fmtpolice .test coverage.html
+test: deps lintall build fmtpolice .test coverage.html
 
 .PHONY: .test
 .test:
-	$(GB) test -v
+	$(GO) test -v
 
 .PHONY: test-race
-test-race:
+test-race: deps
 	$(GO) test -v -race $(GOBUILD_LDFLAGS) $(ALL_PACKAGES)
 
 coverage.html: coverage.coverprofile
@@ -54,8 +55,8 @@ coverage.coverprofile: $(COVERPROFILES)
 	$(GO) tool cover -func=$@
 
 .PHONY: build
-build:
-	$(GB) build $(GOBUILD_LDFLAGS)
+build: deps
+	$(GO) install $(GOBUILD_LDFLAGS) $(ALL_PACKAGES)
 
 .PHONY: update
 update:
@@ -65,14 +66,25 @@ update:
 clean:
 	./utils/clean
 
+.PHONY: distclean
+distclean: clean
+	rm -f vendor/.deps-fetched
+
+.PHONY: deps
+deps: vendor/.deps-fetched
+
+vendor/.deps-fetched:
+	$(GVT) rebuild
+	touch $@
+
 .PHONY: annotations
 annotations:
 	@git grep -E '(TODO|FIXME|XXX):' | grep -V Makefile
 
 .PHONY: fmtpolice
 fmtpolice:
-	./utils/fmtpolice $(PACKAGE_SRC_DIR)
+	./utils/fmtpolice
 
 .PHONY: lintall
-lintall:
+lintall: deps
 	./utils/lintall

@@ -5,6 +5,7 @@ sudo: false
 env:
   global:
   - UNAME="$(uname | tr '[:upper:]' '[:lower:]')"
+  - GO15VENDOREXPERIMENT='1'
 
 addons:
   artifacts:
@@ -16,11 +17,12 @@ addons:
     - 'travis-ci/jupiter-brain/$TRAVIS_BRANCH'
 
 before_install:
-- go get github.com/constabulary/gb/...
+- go get github.com/FiloSottile/gvt
 - go get github.com/alecthomas/gometalinter
 - gometalinter --install --update
 
 script:
+- make deps
 - make lintall
 - make test
 - make test-race
@@ -30,5 +32,5 @@ script:
 after_success:
 - utils/atlas-push
 - mkdir -p build/$UNAME/amd64
-- cp -v bin/jb-server build/$UNAME/amd64/jb-server
+- cp -v ~/gopath/bin/jb-server build/$UNAME/amd64/jb-server
 - echo $ARTIFACTS_PATHS

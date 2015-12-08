@@ -1,8 +1,6 @@
 #!/bin/bash
 
 pushd $(dirname $(dirname ${BASH_SOURCE[0]}))
-export GOPATH="$PWD:$PWD/vendor:$GOPATH"
-pushd src
 
 : ${CYCLOMAX:=20}
 : ${PACKAGE:=github.com/travis-ci/jupiter-brain}
@@ -24,4 +22,4 @@ if [[ $DEBUG ]] ; then
   GOMETALINTER_ARGS="$GOMETALINTER_ARGS --debug"
 fi
 
-exec gometalinter $GOMETALINTER_ARGS $PACKAGE
+exec gometalinter $GOMETALINTER_ARGS $(git ls-files '*.go')
