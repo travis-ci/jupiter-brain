@@ -5,7 +5,6 @@ sudo: false
 env:
   global:
   - UNAME="$(uname | tr '[:upper:]' '[:lower:]')"
-  - GO15VENDOREXPERIMENT='1'
 
 addons:
   artifacts:
