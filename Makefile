@@ -17,8 +17,6 @@ GOBUILD_LDFLAGS ?= -x -ldflags "\
 	-X $(GENERATED_VAR) '$(GENERATED_VALUE)' \
 "
 
-export GO15VENDOREXPERIMENT
-
 COVERPROFILES := \
 	server-coverage.coverprofile \
 	server-negroniraven-coverage.coverprofile \
@@ -37,7 +35,7 @@ export PORT
 all: clean test
 
 .PHONY: test
-test: deps lintall build fmtpolice .test coverage.html
+test: deps build fmtpolice .test coverage.html
 
 .PHONY: .test
 .test:

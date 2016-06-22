@@ -1,11 +1,10 @@
 language: go
-go: 1.5.1
+go: 1.6.2
 sudo: false
 
 env:
   global:
   - UNAME="$(uname | tr '[:upper:]' '[:lower:]')"
-  - GO15VENDOREXPERIMENT='1'
 
 addons:
   artifacts:
@@ -18,12 +17,9 @@ addons:
 
 before_install:
 - go get github.com/FiloSottile/gvt
-- go get github.com/alecthomas/gometalinter
-- gometalinter --install --update
 
 script:
 - make deps
-- make lintall
 - make test
 - make test-race
 - git diff --exit-code
