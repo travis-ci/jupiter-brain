@@ -17,12 +17,9 @@ addons:
 
 before_install:
 - go get github.com/FiloSottile/gvt
-- go get -u github.com/alecthomas/gometalinter
-- gometalinter --install --update
 
 script:
 - make deps
-- make lintall
 - make test
 - make test-race
 - git diff --exit-code
