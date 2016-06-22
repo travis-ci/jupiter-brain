@@ -35,7 +35,7 @@ export PORT
 all: clean test
 
 .PHONY: test
-test: deps lintall build fmtpolice .test coverage.html
+test: deps build fmtpolice .test coverage.html
 
 .PHONY: .test
 .test:
