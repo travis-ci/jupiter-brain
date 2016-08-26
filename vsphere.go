@@ -1,13 +1,13 @@
 package jupiterbrain
 
 import (
-	"fmt"
 	"net/url"
 	"reflect"
 	"sync"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
+	"github.com/pkg/errors"
 	"github.com/sony/gobreaker"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/object"
@@ -81,7 +81,7 @@ func (i *vSphereInstanceManager) Fetch(ctx context.Context, id string) (*Instanc
 
 	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.VMPath+id)
 	if err != nil {
-		return nil, VSphereAPIError{UnderlyingError: err}
+		return nil, errors.Wrap(err, "vm search failed")
 	}
 
 	if vmRef == nil {
@@ -90,7 +90,7 @@ func (i *vSphereInstanceManager) Fetch(ctx context.Context, id string) (*Instanc
 
 	vm, ok := vmRef.(*object.VirtualMachine)
 	if !ok {
-		return nil, fmt.Errorf("object at path %s is a %T, but expected VirtualMachine", i.paths.VMPath+id, vmRef)
+		return nil, errors.Errorf("object at path %s is a %T, but expected VirtualMachine", i.paths.VMPath+id, vmRef)
 	}
 
 	return i.instanceForVirtualMachine(ctx, vm)
@@ -104,7 +104,7 @@ func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) 
 
 	vms, err := folder.Children(ctx)
 	if err != nil {
-		return nil, VSphereAPIError{UnderlyingError: err}
+		return nil, errors.Wrap(err, "failed to list children of vm folder")
 	}
 
 	var instances []*Instance
@@ -133,12 +133,12 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, baseName)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't get base VM and snapshot: %s", err)
+		return nil, errors.Wrap(err, "failed to find base VM and snapshot")
 	}
 
 	resourcePool, err := i.resourcePool(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't get resource pool: %s", err)
+		return nil, errors.Wrap(err, "failed to find resource pool")
 	}
 
 	relocateSpec := types.VirtualMachineRelocateSpec{
@@ -163,31 +163,31 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 	task, err := vm.Clone(ctx, vmFolder, name.String(), cloneSpec)
 	if err != nil {
 		go i.terminateIfExists(ctx, name.String())
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create vm clone task")
 	}
 
 	err = task.Wait(ctx)
 	if err != nil {
 		go i.terminateIfExists(ctx, name.String())
-		return nil, err
+		return nil, errors.Wrap(err, "vm clone task failed")
 	}
 
 	var mt mo.Task
 	err = task.Properties(ctx, task.Reference(), []string{"info"}, &mt)
 	if err != nil {
 		go i.terminateIfExists(ctx, name.String())
-		return nil, err
+		return nil, errors.Wrap(err, "failed to get vm info properties")
 	}
 
 	if mt.Info.Result == nil {
 		go i.terminateIfExists(ctx, name.String())
-		return nil, fmt.Errorf("expected VM, but got nil")
+		return nil, errors.Errorf("expected VM, but got nil")
 	}
 
 	vmManagedRef, ok := mt.Info.Result.(types.ManagedObjectReference)
 	if !ok {
 		go i.terminateIfExists(ctx, name.String())
-		return nil, fmt.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
+		return nil, errors.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
 	}
 
 	newVM := object.NewVirtualMachine(client.Client, vmManagedRef)
@@ -195,13 +195,13 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 	task, err = newVM.PowerOn(ctx)
 	if err != nil {
 		go i.terminateIfExists(ctx, name.String())
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create vm power on task")
 	}
 
 	err = task.Wait(ctx)
 	if err != nil {
 		go i.terminateIfExists(ctx, name.String())
-		return nil, err
+		return nil, errors.Wrap(err, "vm power on task failed")
 	}
 
 	return i.instanceForVirtualMachine(ctx, newVM)
@@ -217,7 +217,7 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 
 	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.VMPath+id)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to search for vm")
 	}
 
 	if vmRef == nil {
@@ -226,12 +226,12 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 
 	vm, ok := vmRef.(*object.VirtualMachine)
 	if !ok {
-		return fmt.Errorf("not a VM")
+		return errors.New("not a VM")
 	}
 
 	task, err := vm.PowerOff(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create vm power off task")
 	}
 
 	// Ignore error since the VM may already be powered off. vm.Destroy will fail
@@ -240,10 +240,11 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 
 	task, err = vm.Destroy(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create vm destroy task")
 	}
 
-	return task.Wait(ctx)
+	err = task.Wait(ctx)
+	return errors.Wrap(err, "vm destroy task failed")
 }
 
 // Terminate the VM if it exists
@@ -263,7 +264,7 @@ func (i *vSphereInstanceManager) client(ctx context.Context) (*govmomi.Client, e
 	if i.vSphereClient == nil {
 		client, err := i.createClient(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't create vSphere client: %s", err)
+			return nil, err
 		}
 
 		i.vSphereClient = client
@@ -274,7 +275,7 @@ func (i *vSphereInstanceManager) client(ctx context.Context) (*govmomi.Client, e
 	if err != nil {
 		client, err := i.createClient(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't create vSphere client: %s", err)
+			return nil, err
 		}
 
 		i.vSphereClient = client
@@ -284,7 +285,7 @@ func (i *vSphereInstanceManager) client(ctx context.Context) (*govmomi.Client, e
 	if !active {
 		err := i.vSphereClient.SessionManager.Login(ctx, i.vSphereURL.User)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't log in to vSphere API: %s", err)
+			return nil, errors.Wrap(err, "failed to log in to vsphere api")
 		}
 	}
 
@@ -294,7 +295,7 @@ func (i *vSphereInstanceManager) client(ctx context.Context) (*govmomi.Client, e
 func (i *vSphereInstanceManager) createClient(ctx context.Context) (*govmomi.Client, error) {
 	client, err := govmomi.NewClient(ctx, i.vSphereURL, true)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create govmomi client")
 	}
 
 	client.Client.RoundTripper = vim25.Retry(client.Client.RoundTripper, vim25.TemporaryNetworkError(3))
@@ -322,16 +323,16 @@ func (i *vSphereInstanceManager) vmFolder(ctx context.Context) (*object.Folder, 
 
 	folderRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.VMPath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to search for vm folder")
 	}
 
 	if folderRef == nil {
-		return nil, fmt.Errorf("VM folder not found")
+		return nil, errors.New("VM folder not found")
 	}
 
 	folder, ok := folderRef.(*object.Folder)
 	if !ok {
-		return nil, fmt.Errorf("VM folder is not a folder but %T", folderRef)
+		return nil, errors.Errorf("VM folder is not a folder but %T", folderRef)
 	}
 
 	return folder, nil
@@ -347,22 +348,22 @@ func (i *vSphereInstanceManager) resourcePool(ctx context.Context) (*types.Manag
 
 	clusterRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.ClusterPath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "cluster search failed")
 	}
 
 	if clusterRef == nil {
-		return nil, fmt.Errorf("cluster not found at %s", i.paths.ClusterPath)
+		return nil, errors.Errorf("cluster not found at %s", i.paths.ClusterPath)
 	}
 
 	cluster, ok := clusterRef.(*object.ClusterComputeResource)
 	if !ok {
-		return nil, fmt.Errorf("object at %s is %T, but expected ComputeClusterResource", i.paths.ClusterPath, clusterRef)
+		return nil, errors.Errorf("object at %s is %T, but expected ComputeClusterResource", i.paths.ClusterPath, clusterRef)
 	}
 
 	var mccr mo.ClusterComputeResource
 	err = cluster.Properties(ctx, cluster.Reference(), []string{"resourcePool"}, &mccr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to find cluster resourcePool property")
 	}
 
 	return mccr.ResourcePool, nil
@@ -378,7 +379,7 @@ func (i *vSphereInstanceManager) findBaseVMAndSnapshot(ctx context.Context, name
 
 	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.BasePath+name)
 	if err != nil {
-		return nil, types.VirtualMachineSnapshotTree{}, err
+		return nil, types.VirtualMachineSnapshotTree{}, errors.Wrap(err, "failed to search for VM")
 	}
 
 	if vmRef == nil {
@@ -387,22 +388,22 @@ func (i *vSphereInstanceManager) findBaseVMAndSnapshot(ctx context.Context, name
 
 	vm, ok := vmRef.(*object.VirtualMachine)
 	if !ok {
-		return nil, types.VirtualMachineSnapshotTree{}, fmt.Errorf("base VM %s is a %T, but expected VirtualMachine", name, vmRef)
+		return nil, types.VirtualMachineSnapshotTree{}, errors.Errorf("base VM %s is a %T, but expected VirtualMachine", name, vmRef)
 	}
 
 	var mvm mo.VirtualMachine
 	err = vm.Properties(ctx, vm.Reference(), []string{"snapshot"}, &mvm)
 	if err != nil {
-		return nil, types.VirtualMachineSnapshotTree{}, fmt.Errorf("couldn't get snapshot info for base VM: %s", err)
+		return nil, types.VirtualMachineSnapshotTree{}, errors.Wrap(err, "failed to get snapshot")
 	}
 
 	if mvm.Snapshot == nil {
-		return nil, types.VirtualMachineSnapshotTree{}, fmt.Errorf("invalid base VM (no snapshot)")
+		return nil, types.VirtualMachineSnapshotTree{}, errors.Errorf("no snapshots")
 	}
 
 	snapshotTree, ok := i.findSnapshot(mvm.Snapshot.RootSnapshotList, "base")
 	if !ok {
-		return nil, types.VirtualMachineSnapshotTree{}, fmt.Errorf("invalid base VM (no snapshot named 'base')")
+		return nil, types.VirtualMachineSnapshotTree{}, errors.Errorf("no snapshot with name 'base'")
 	}
 
 	return vm, snapshotTree, nil
@@ -435,7 +436,7 @@ func (i *vSphereInstanceManager) instanceForVirtualMachine(ctx context.Context, 
 	var mvm mo.VirtualMachine
 	err = vm.Properties(ctx, vm.Reference(), []string{"config", "guest", "runtime"}, &mvm)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to get vm properties")
 	}
 
 	var ipAddresses []string
@@ -446,7 +447,7 @@ func (i *vSphereInstanceManager) instanceForVirtualMachine(ctx context.Context, 
 	}
 
 	if reflect.DeepEqual(mvm.Runtime, types.VirtualMachineRuntimeInfo{}) {
-		return nil, fmt.Errorf("no instance for vm %v", vm)
+		return nil, errors.Errorf("no instance for vm %v", vm)
 	}
 
 	return &Instance{
