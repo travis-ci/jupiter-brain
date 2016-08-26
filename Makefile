@@ -1,5 +1,5 @@
 PACKAGE := github.com/travis-ci/jupiter-brain
-ALL_PACKAGES := $(shell utils/list-packages) $(PACKAGE)/cmd/...
+ALL_PACKAGES := $(shell go list ./... | grep -v /vendor/)
 
 VERSION_VAR := main.VersionString
 VERSION_VALUE ?= $(shell git describe --always --dirty 2> /dev/null)
