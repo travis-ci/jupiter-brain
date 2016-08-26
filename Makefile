@@ -4,7 +4,7 @@ ALL_PACKAGES := $(shell utils/list-packages) $(PACKAGE)/cmd/...
 VERSION_VAR := main.VersionString
 VERSION_VALUE ?= $(shell git describe --always --dirty 2> /dev/null)
 REV_VAR := main.RevisionString
-REV_VALUE ?= $(shell git rev-parse --sq HEAD 2> /dev/null || echo "'???'")
+REV_VALUE ?= $(shell git rev-parse HEAD 2> /dev/null || echo "???")
 GENERATED_VAR := main.GeneratedString
 GENERATED_VALUE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%S%z')
 
@@ -12,9 +12,9 @@ GO ?= go
 GVT ?= gvt
 GOPATH := $(shell echo $${GOPATH%%:*})
 GOBUILD_LDFLAGS ?= -x -ldflags "\
-	-X $(VERSION_VAR) '$(VERSION_VALUE)' \
-	-X $(REV_VAR) $(REV_VALUE) \
-	-X $(GENERATED_VAR) '$(GENERATED_VALUE)' \
+	-X '$(VERSION_VAR)=$(VERSION_VALUE)' \
+	-X '$(REV_VAR)=$(REV_VALUE)' \
+	-X '$(GENERATED_VAR)=$(GENERATED_VALUE)' \
 "
 
 COVERPROFILES := \
@@ -39,7 +39,7 @@ test: deps build fmtpolice .test coverage.html
 
 .PHONY: .test
 .test:
-	$(GO) test -v
+	$(GO) test -v $(GOBUILD_LDFLAGS) $(ALL_PACKAGES)
 
 .PHONY: test-race
 test-race: deps
