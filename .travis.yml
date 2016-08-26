@@ -26,7 +26,6 @@ script:
 - git diff --cached --exit-code
 
 after_success:
-- utils/atlas-push
 - mkdir -p build/$UNAME/amd64
 - cp -v ~/gopath/bin/jb-server build/$UNAME/amd64/jb-server
 - echo $ARTIFACTS_PATHS
