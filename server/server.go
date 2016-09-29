@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/meatballhat/negroni-logrus"
 	"github.com/travis-ci/jupiter-brain"
+	"github.com/travis-ci/jupiter-brain/metrics"
 	"github.com/travis-ci/jupiter-brain/server/jsonapi"
 	"github.com/travis-ci/jupiter-brain/server/negroniraven"
 	"golang.org/x/net/context"
@@ -138,6 +139,8 @@ func (srv *server) authMiddleware(w http.ResponseWriter, req *http.Request, f ht
 }
 
 func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request) {
+	defer metrics.TimeSince("travis.jupiter-brain.endpoints.instances-list", time.Now())
+
 	instances, err := srv.i.List(context.TODO())
 	if err != nil {
 		jsonapi.Error(w, err, http.StatusInternalServerError)
@@ -212,6 +215,8 @@ func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request)
 }
 
 func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Request) {
+	defer metrics.TimeSince("travis.jupiter-brain.endpoints.instances-create", time.Now())
+
 	var requestBody map[string]map[string]string
 
 	err := json.NewDecoder(req.Body).Decode(&requestBody)
@@ -274,6 +279,8 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 }
 
 func (srv *server) handleInstanceByIDFetch(w http.ResponseWriter, req *http.Request) {
+	defer metrics.TimeSince("travis.jupiter-brain.endpoints.instance-by-id-fetch", time.Now())
+
 	vars := mux.Vars(req)
 	instance, err := srv.i.Fetch(context.TODO(), vars["id"])
 	if err != nil {
@@ -307,6 +314,8 @@ func (srv *server) handleInstanceByIDFetch(w http.ResponseWriter, req *http.Requ
 }
 
 func (srv *server) handleInstanceByIDTerminate(w http.ResponseWriter, req *http.Request) {
+	defer metrics.TimeSince("travis.jupiter-brain.endpoints.instance-by-id-terminate", time.Now())
+
 	vars := mux.Vars(req)
 	err := srv.i.Terminate(context.TODO(), vars["id"])
 	if err != nil {
@@ -334,6 +343,7 @@ func (srv *server) handleInstanceByIDTerminate(w http.ResponseWriter, req *http.
 }
 
 func (srv *server) handleInstanceSync(w http.ResponseWriter, req *http.Request) {
+	defer metrics.TimeSince("travis.jupiter-brain.endpoints.instance-sync", time.Now())
 	instances, err := srv.i.List(context.TODO())
 	if err != nil {
 		jsonapi.Error(w, err, http.StatusInternalServerError)

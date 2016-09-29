@@ -2,9 +2,12 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
+	librato "github.com/mihasya/go-metrics-librato"
+	metrics "github.com/rcrowley/go-metrics"
 	"github.com/travis-ci/jupiter-brain/server"
 )
 
@@ -68,6 +71,21 @@ func main() {
 			Usage:  "Sentry DSN to send errors to",
 			EnvVar: "JUPITER_BRAIN_SENTRY_DSN,SENTRY_DSN",
 		},
+		cli.StringFlag{
+			Name:   "librato-email",
+			Usage:  "Email for Librato account to send metrics to",
+			EnvVar: "JUPITER_BRAIN_LIBRATO_EMAIL,LIBRATO_EMAIL",
+		},
+		cli.StringFlag{
+			Name:   "librato-token",
+			Usage:  "Token for Librato account to send metrics to",
+			EnvVar: "JUPITER_BRAIN_LIBRATO_TOKEN,LIBRATO_TOKEN",
+		},
+		cli.StringFlag{
+			Name:   "librato-source",
+			Usage:  "The source to use when sending metrics to Librato",
+			EnvVar: "JUPITER_BRAIN_LIBRATO_SOURCE,LIBRATO_SOURCE",
+		},
 	}
 	app.Action = runServer
 
@@ -76,6 +94,16 @@ func main() {
 
 func runServer(c *cli.Context) {
 	logrus.SetFormatter(&logrus.TextFormatter{DisableColors: true})
+
+	go librato.Librato(
+		metrics.DefaultRegistry,
+		time.Minute,
+		c.String("librato-email"),
+		c.String("librato-token"),
+		c.String("librato-source"),
+		[]float64{0.50, 0.75, 0.90, 0.95, 0.99, 0.999, 1.0},
+		time.Millisecond,
+	)
 
 	server.Main(&server.Config{
 		Addr:      c.String("addr"),
