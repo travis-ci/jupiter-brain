@@ -81,6 +81,14 @@
 			"branch": "HEAD"
 		},
 		{
+			"importpath": "github.com/mihasya/go-metrics-librato",
+			"repository": "https://github.com/mihasya/go-metrics-librato",
+			"vcs": "git",
+			"revision": "0ec8d5e8bf04a48fc5c96792bfd016b08afdabad",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/pborman/uuid",
 			"repository": "https://github.com/pborman/uuid",
 			"vcs": "",
@@ -96,11 +104,27 @@
 			"notests": true
 		},
 		{
+			"importpath": "github.com/rcrowley/go-metrics",
+			"repository": "https://github.com/rcrowley/go-metrics",
+			"vcs": "git",
+			"revision": "ab2277b1c5d15c3cba104e9cbddbdfc622df5ad8",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/sony/gobreaker",
 			"repository": "https://github.com/sony/gobreaker",
 			"vcs": "",
 			"revision": "fbf121b75055635e23032f4421865db5414d1d17",
 			"branch": "master"
+		},
+		{
+			"importpath": "github.com/stathat/go",
+			"repository": "https://github.com/stathat/go",
+			"vcs": "git",
+			"revision": "74669b9f388d9d788c97399a0824adbfee78400e",
+			"branch": "master",
+			"notests": true
 		},
 		{
 			"importpath": "github.com/vmware/govmomi",
