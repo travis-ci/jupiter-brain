@@ -11,9 +11,10 @@
 		{
 			"importpath": "github.com/braintree/manners",
 			"repository": "https://github.com/braintree/manners",
-			"vcs": "",
-			"revision": "5280e250f2795914acbeb2bf3b55dd5a2d1fba52",
-			"branch": "HEAD"
+			"vcs": "git",
+			"revision": "82a8879fc5fd0381fa8b2d8033b19bf255252088",
+			"branch": "master",
+			"notests": true
 		},
 		{
 			"importpath": "github.com/codegangsta/cli",
