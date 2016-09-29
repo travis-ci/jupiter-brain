@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
 	"github.com/meatballhat/negroni-logrus"
+	"github.com/pkg/errors"
 	"github.com/travis-ci/jupiter-brain"
 	"github.com/travis-ci/jupiter-brain/metrics"
 	"github.com/travis-ci/jupiter-brain/server/jsonapi"
@@ -49,16 +49,16 @@ func newServer(cfg *Config) (*server, error) {
 
 	u, err := url.Parse(cfg.VSphereURL)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to parse vsphere url")
 	}
 
 	if !u.IsAbs() {
-		return nil, fmt.Errorf("vSphere API URL must be absolute")
+		return nil, errors.Errorf("vSphere API URL must be absolute")
 	}
 
 	db, err := newPGDatabase(cfg.DatabaseURL)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create postgres database")
 	}
 
 	paths := jupiterbrain.VSpherePaths{
@@ -95,7 +95,10 @@ func (srv *server) Setup() {
 
 func (srv *server) Run() {
 	srv.log.WithField("addr", srv.addr).Info("Listening")
-	_ = srv.s.ListenAndServe(srv.addr, srv.n)
+	err := srv.s.ListenAndServe(srv.addr, srv.n)
+	if err != nil {
+		srv.log.WithField("err", err).Error("ListenAndServe failed")
+	}
 }
 
 func (srv *server) setupRoutes() {

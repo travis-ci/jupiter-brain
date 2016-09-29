@@ -96,6 +96,14 @@
 			"branch": "master"
 		},
 		{
+			"importpath": "github.com/pkg/errors",
+			"repository": "https://github.com/pkg/errors",
+			"vcs": "git",
+			"revision": "17b591df37844cde689f4d5813e5cea0927d8dd2",
+			"branch": "HEAD",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/rcrowley/go-metrics",
 			"repository": "https://github.com/rcrowley/go-metrics",
 			"vcs": "git",
