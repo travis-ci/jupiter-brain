@@ -97,7 +97,9 @@ func (srv *server) Setup() {
 
 func (srv *server) Run() {
 	srv.log.WithField("addr", srv.addr).Info("Listening")
-	err := srv.s.ListenAndServe(srv.addr, srv.n)
+	srv.s.Addr = srv.addr
+	srv.s.Handler = srv.n
+	err := srv.s.ListenAndServe()
 	if err != nil {
 		srv.log.WithField("err", err).Error("ListenAndServe failed")
 	}
