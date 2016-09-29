@@ -66,4 +66,15 @@ func TestAuth(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected status code %d but got %d", http.StatusOK, resp.StatusCode)
 	}
+
+	req.Header.Set("Authorization", "token hello-world-incorrect")
+
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected status code %d but got %d", http.StatusUnauthorized, resp.StatusCode)
+	}
 }
