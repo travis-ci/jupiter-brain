@@ -97,6 +97,8 @@ func runServer(c *cli.Context) {
 	logrus.SetFormatter(&logrus.TextFormatter{DisableColors: true})
 
 	if c.IsSet("librato-email") && c.IsSet("librato-token") && c.IsSet("librato-source") {
+		logrus.Info("starting librato metrics reporter")
+
 		go librato.Librato(
 			metrics.DefaultRegistry,
 			time.Minute,
