@@ -8,6 +8,7 @@ import (
 	"github.com/codegangsta/cli"
 	librato "github.com/mihasya/go-metrics-librato"
 	metrics "github.com/rcrowley/go-metrics"
+	travismetrics "github.com/travis-ci/jupiter-brain/metrics"
 	"github.com/travis-ci/jupiter-brain/server"
 )
 
@@ -104,6 +105,7 @@ func runServer(c *cli.Context) {
 		[]float64{0.50, 0.75, 0.90, 0.95, 0.99, 0.999, 1.0},
 		time.Millisecond,
 	)
+	go travismetrics.ReportMemstatsMetrics()
 
 	server.Main(&server.Config{
 		Addr:      c.String("addr"),
