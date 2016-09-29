@@ -259,7 +259,11 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 	recoverDelete := false
 	defer func() {
 		if recoverDelete && instance != nil {
-			go func() { _ = srv.i.Terminate(context.TODO(), instance.ID) }()
+			go func() {
+				srv.s.StartRoutine()
+				defer srv.s.FinishRoutine()
+				srv.i.Terminate(context.TODO(), instance.ID)
+			}()
 		}
 	}()
 
