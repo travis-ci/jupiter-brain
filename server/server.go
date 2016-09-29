@@ -386,10 +386,10 @@ func (srv *server) signalHandler() {
 			switch sig {
 			case syscall.SIGTERM:
 				srv.log.Info("Received SIGTERM, shutting down now.")
-				os.Exit(0)
+				srv.s.Close()
 			case syscall.SIGINT:
 				srv.log.Info("Received SIGINT, shutting down now.")
-				os.Exit(0)
+				srv.s.Close()
 			case syscall.SIGUSR1:
 				srv.log.WithFields(logrus.Fields{
 					"version":   os.Getenv("VERSION"),
