@@ -96,15 +96,17 @@ func main() {
 func runServer(c *cli.Context) {
 	logrus.SetFormatter(&logrus.TextFormatter{DisableColors: true})
 
-	go librato.Librato(
-		metrics.DefaultRegistry,
-		time.Minute,
-		c.String("librato-email"),
-		c.String("librato-token"),
-		c.String("librato-source"),
-		[]float64{0.50, 0.75, 0.90, 0.95, 0.99, 0.999, 1.0},
-		time.Millisecond,
-	)
+	if c.IsSet("librato-email") && c.IsSet("librato-token") && c.IsSet("librato-source") {
+		go librato.Librato(
+			metrics.DefaultRegistry,
+			time.Minute,
+			c.String("librato-email"),
+			c.String("librato-token"),
+			c.String("librato-source"),
+			[]float64{0.50, 0.75, 0.90, 0.95, 0.99, 0.999, 1.0},
+			time.Millisecond,
+		)
+	}
 	go travismetrics.ReportMemstatsMetrics()
 
 	server.Main(&server.Config{
