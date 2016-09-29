@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -133,12 +135,15 @@ func (srv *server) authMiddleware(w http.ResponseWriter, req *http.Request, f ht
 		return
 	}
 
-	if authHeader != ("token "+srv.authToken) && authHeader != ("token="+srv.authToken) {
-		jsonapi.Error(w, errors.New("incorrect token"), http.StatusUnauthorized)
+	if strings.HasPrefix(authHeader, "token ") && subtle.ConstantTimeCompare([]byte("token "+srv.authToken), []byte(authHeader)) == 1 {
+		f(w, req)
+		return
+	} else if strings.HasPrefix(authHeader, "token=") && subtle.ConstantTimeCompare([]byte("token="+srv.authToken), []byte(authHeader)) == 1 {
+		f(w, req)
 		return
 	}
 
-	f(w, req)
+	jsonapi.Error(w, errors.New("incorrect token"), http.StatusUnauthorized)
 }
 
 func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request) {
