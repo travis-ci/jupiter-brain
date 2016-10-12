@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -23,7 +24,6 @@ import (
 	"github.com/travis-ci/jupiter-brain/metrics"
 	"github.com/travis-ci/jupiter-brain/server/jsonapi"
 	"github.com/travis-ci/jupiter-brain/server/negroniraven"
-	"golang.org/x/net/context"
 )
 
 type server struct {
@@ -151,7 +151,7 @@ func (srv *server) authMiddleware(w http.ResponseWriter, req *http.Request, f ht
 func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request) {
 	defer metrics.TimeSince("travis.jupiter-brain.endpoints.instances-list", time.Now())
 
-	instances, err := srv.i.List(context.TODO())
+	instances, err := srv.i.List(req.Context())
 	if err != nil {
 		jsonapi.Error(w, err, http.StatusInternalServerError)
 		return
@@ -250,7 +250,7 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	instance, err := srv.i.Start(context.TODO(), requestBody["data"]["base-image"])
+	instance, err := srv.i.Start(req.Context(), requestBody["data"]["base-image"])
 	if err != nil {
 		jsonapi.Error(w, err, http.StatusInternalServerError)
 		return
@@ -296,7 +296,7 @@ func (srv *server) handleInstanceByIDFetch(w http.ResponseWriter, req *http.Requ
 	defer metrics.TimeSince("travis.jupiter-brain.endpoints.instance-by-id-fetch", time.Now())
 
 	vars := mux.Vars(req)
-	instance, err := srv.i.Fetch(context.TODO(), vars["id"])
+	instance, err := srv.i.Fetch(req.Context(), vars["id"])
 	if err != nil {
 		switch err.(type) {
 		case jupiterbrain.VirtualMachineNotFoundError:
@@ -331,7 +331,7 @@ func (srv *server) handleInstanceByIDTerminate(w http.ResponseWriter, req *http.
 	defer metrics.TimeSince("travis.jupiter-brain.endpoints.instance-by-id-terminate", time.Now())
 
 	vars := mux.Vars(req)
-	err := srv.i.Terminate(context.TODO(), vars["id"])
+	err := srv.i.Terminate(req.Context(), vars["id"])
 	if err != nil {
 		switch err.(type) {
 		case jupiterbrain.VirtualMachineNotFoundError:
@@ -358,7 +358,7 @@ func (srv *server) handleInstanceByIDTerminate(w http.ResponseWriter, req *http.
 
 func (srv *server) handleInstanceSync(w http.ResponseWriter, req *http.Request) {
 	defer metrics.TimeSince("travis.jupiter-brain.endpoints.instance-sync", time.Now())
-	instances, err := srv.i.List(context.TODO())
+	instances, err := srv.i.List(req.Context())
 	if err != nil {
 		jsonapi.Error(w, err, http.StatusInternalServerError)
 		return
