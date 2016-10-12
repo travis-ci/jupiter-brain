@@ -4,11 +4,13 @@ import (
 	"net/url"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/sony/gobreaker"
+	"github.com/travis-ci/jupiter-brain/metrics"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25"
@@ -160,6 +162,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		return nil, err
 	}
 
+	cloneStartTime := time.Now()
 	task, err := vm.Clone(ctx, vmFolder, name.String(), cloneSpec)
 	if err != nil {
 		go i.terminateIfExists(ctx, name.String())
@@ -171,6 +174,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		go i.terminateIfExists(ctx, name.String())
 		return nil, errors.Wrap(err, "vm clone task failed")
 	}
+	metrics.TimeSince("travis.jupiter-brain.tasks.clone", cloneStartTime)
 
 	var mt mo.Task
 	err = task.Properties(ctx, task.Reference(), []string{"info"}, &mt)
@@ -192,6 +196,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	newVM := object.NewVirtualMachine(client.Client, vmManagedRef)
 
+	powerOnStartTime := time.Now()
 	task, err = newVM.PowerOn(ctx)
 	if err != nil {
 		go i.terminateIfExists(ctx, name.String())
@@ -203,6 +208,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		go i.terminateIfExists(ctx, name.String())
 		return nil, errors.Wrap(err, "vm power on task failed")
 	}
+	metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
 
 	return i.instanceForVirtualMachine(ctx, newVM)
 }
