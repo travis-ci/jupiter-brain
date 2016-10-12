@@ -289,7 +289,10 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 	w.Header().Set("Content-Type", "application/vnd.api+json")
 	w.Header().Set("Location", fmt.Sprintf("/instances/%s", instance.ID))
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, string(b)+"\n")
+	_, err = fmt.Fprintf(w, string(b)+"\n")
+	if err != nil {
+		recoverDelete = true
+	}
 }
 
 func (srv *server) handleInstanceByIDFetch(w http.ResponseWriter, req *http.Request) {
