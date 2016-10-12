@@ -80,7 +80,10 @@ func newServer(cfg *Config) (*server, error) {
 
 		n: negroni.New(),
 		r: mux.NewRouter(),
-		s: manners.NewServer(),
+		s: manners.NewWithServer(&http.Server{
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 3 * time.Minute,
+		}),
 
 		db:       db,
 		bootTime: time.Now().UTC(),
