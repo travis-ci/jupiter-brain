@@ -101,7 +101,7 @@ func (srv *server) Setup() {
 func (srv *server) Run() {
 	srv.log.WithField("addr", srv.addr).Info("Listening")
 	srv.s.Addr = srv.addr
-	srv.s.Handler = srv.n
+	srv.s.Handler = http.TimeoutHandler(srv.n, 3*time.Minute, "request timed out")
 	err := srv.s.ListenAndServe()
 	if err != nil {
 		srv.log.WithField("err", err).Error("ListenAndServe failed")
