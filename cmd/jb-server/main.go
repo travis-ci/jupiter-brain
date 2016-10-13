@@ -57,6 +57,12 @@ func main() {
 			Usage:  "path to compute cluster that VMs will be booted in",
 			EnvVar: "JUPITER_BRAIN_VSPHERE_CLUSTER_PATH",
 		},
+		cli.IntFlag{
+			Name:   "vsphere-concurrent-operations",
+			Usage:  "number of concurrent vSphere operations",
+			EnvVar: "JUPITER_BRAIN_VSPHERE_CONCURRENT_OPERATIONS",
+			Value:  100,
+		},
 		cli.StringFlag{
 			Name:   "database-url",
 			Usage:  "URL to the PostgreSQL database",
@@ -117,10 +123,11 @@ func runServer(c *cli.Context) {
 		Debug:     c.Bool("debug"),
 		SentryDSN: c.String("sentry-dsn"),
 
-		VSphereURL:         c.String("vsphere-api-url"),
-		VSphereBasePath:    c.String("vsphere-base-path"),
-		VSphereVMPath:      c.String("vsphere-vm-path"),
-		VSphereClusterPath: c.String("vsphere-cluster-path"),
+		VSphereURL:                  c.String("vsphere-api-url"),
+		VSphereBasePath:             c.String("vsphere-base-path"),
+		VSphereVMPath:               c.String("vsphere-vm-path"),
+		VSphereClusterPath:          c.String("vsphere-cluster-path"),
+		VSphereConcurrentOperations: c.Int("vsphere-concurrent-operations"),
 
 		DatabaseURL: c.String("database-url"),
 	})

@@ -76,7 +76,7 @@ func newServer(cfg *Config) (*server, error) {
 
 		log: log,
 
-		i: jupiterbrain.NewVSphereInstanceManager(log, u, paths),
+		i: jupiterbrain.NewVSphereInstanceManager(log, u, paths, cfg.VSphereConcurrentOperations),
 
 		n: negroni.New(),
 		r: mux.NewRouter(),

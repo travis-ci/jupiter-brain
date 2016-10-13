@@ -23,6 +23,8 @@ import (
 type vSphereInstanceManager struct {
 	log *logrus.Logger
 
+	concurrencySem chan struct{}
+
 	vSphereClientMutex sync.Mutex
 	vSphereClient      *govmomi.Client
 
@@ -65,15 +67,23 @@ type VSpherePaths struct {
 }
 
 // NewVSphereInstanceManager creates a new instance manager backed by vSphere
-func NewVSphereInstanceManager(log *logrus.Logger, vSphereURL *url.URL, paths VSpherePaths) InstanceManager {
+func NewVSphereInstanceManager(log *logrus.Logger, vSphereURL *url.URL, paths VSpherePaths, concurrency int) InstanceManager {
 	return &vSphereInstanceManager{
-		log:        log,
-		vSphereURL: vSphereURL,
-		paths:      paths,
+		log:            log,
+		vSphereURL:     vSphereURL,
+		paths:          paths,
+		concurrencySem: make(chan struct{}, concurrency),
 	}
 }
 
 func (i *vSphereInstanceManager) Fetch(ctx context.Context, id string) (*Instance, error) {
+	select {
+	case i.concurrencySem <- struct{}{}:
+		defer func() { <-i.concurrencySem }()
+	case <-ctx.Done():
+		return nil, errors.Wrap(ctx.Err(), "timed out waiting for conurrency semaphore")
+	}
+
 	client, err := i.client(ctx)
 	if err != nil {
 		return nil, err
@@ -99,6 +109,13 @@ func (i *vSphereInstanceManager) Fetch(ctx context.Context, id string) (*Instanc
 }
 
 func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) {
+	select {
+	case i.concurrencySem <- struct{}{}:
+		defer func() { <-i.concurrencySem }()
+	case <-ctx.Done():
+		return nil, errors.Wrap(ctx.Err(), "timed out waiting for conurrency semaphore")
+	}
+
 	folder, err := i.vmFolder(ctx)
 	if err != nil {
 		return nil, err
@@ -128,6 +145,13 @@ func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) 
 }
 
 func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*Instance, error) {
+	select {
+	case i.concurrencySem <- struct{}{}:
+		defer func() { <-i.concurrencySem }()
+	case <-ctx.Done():
+		return nil, errors.Wrap(ctx.Err(), "timed out waiting for conurrency semaphore")
+	}
+
 	client, err := i.client(ctx)
 	if err != nil {
 		return nil, err
@@ -214,6 +238,13 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 }
 
 func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error {
+	select {
+	case i.concurrencySem <- struct{}{}:
+		defer func() { <-i.concurrencySem }()
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "timed out waiting for conurrency semaphore")
+	}
+
 	client, err := i.client(ctx)
 	if err != nil {
 		return err
