@@ -14,6 +14,7 @@ import (
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25"
+	"github.com/vmware/govmomi/vim25/methods"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
@@ -171,6 +172,12 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	err = task.Wait(ctx)
 	if err != nil {
+		if ctx.Err() != nil {
+			methods.CancelTask(ctx, client.Client.RoundTripper, &types.CancelTask{
+				This: task.Reference(),
+			})
+		}
+
 		go i.terminateIfExists(ctx, name.String())
 		return nil, errors.Wrap(err, "vm clone task failed")
 	}
