@@ -538,14 +538,23 @@ func (i *vSphereInstanceManager) instanceForVirtualMachine(ctx context.Context, 
 }
 
 func (i *vSphereInstanceManager) requestReadSemaphore(ctx context.Context) (func(), error) {
+	metrics.Gauge("travis.jupiter-brain.semaphore.read.waiting", int64(len(i.readConcurrencySem)))
+	defer metrics.TimeSince("travis.jupiter-brain.semaphore.read.wait-time", time.Now())
+
 	return i.requestSemaphore(ctx, i.readConcurrencySem)
 }
 
 func (i *vSphereInstanceManager) requestCreateSemaphore(ctx context.Context) (func(), error) {
+	metrics.Gauge("travis.jupiter-brain.semaphore.create.waiting", int64(len(i.createConcurrencySem)))
+	defer metrics.TimeSince("travis.jupiter-brain.semaphore.create.wait-time", time.Now())
+
 	return i.requestSemaphore(ctx, i.createConcurrencySem)
 }
 
 func (i *vSphereInstanceManager) requestDeleteSemaphore(ctx context.Context) (func(), error) {
+	metrics.Gauge("travis.jupiter-brain.semaphore.delete.waiting", int64(len(i.deleteConcurrencySem)))
+	defer metrics.TimeSince("travis.jupiter-brain.semaphore.delete.wait-time", time.Now())
+
 	return i.requestSemaphore(ctx, i.deleteConcurrencySem)
 }
 
