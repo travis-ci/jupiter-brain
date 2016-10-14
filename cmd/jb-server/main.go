@@ -58,10 +58,22 @@ func main() {
 			EnvVar: "JUPITER_BRAIN_VSPHERE_CLUSTER_PATH",
 		},
 		cli.IntFlag{
-			Name:   "vsphere-concurrent-operations",
-			Usage:  "number of concurrent vSphere operations",
-			EnvVar: "JUPITER_BRAIN_VSPHERE_CONCURRENT_OPERATIONS",
-			Value:  100,
+			Name:   "vsphere-concurrent-read-operations",
+			Usage:  "number of concurrent read vSphere operations",
+			EnvVar: "JUPITER_BRAIN_VSPHERE_CONCURRENT_READ_OPERATIONS",
+			Value:  4,
+		},
+		cli.IntFlag{
+			Name:   "vsphere-concurrent-create-operations",
+			Usage:  "number of concurrent create vSphere operations",
+			EnvVar: "JUPITER_BRAIN_VSPHERE_CONCURRENT_CREATE_OPERATIONS",
+			Value:  48,
+		},
+		cli.IntFlag{
+			Name:   "vsphere-concurrent-delete-operations",
+			Usage:  "number of concurrent delete vSphere operations",
+			EnvVar: "JUPITER_BRAIN_VSPHERE_CONCURRENT_DELETE_OPERATIONS",
+			Value:  48,
 		},
 		cli.StringFlag{
 			Name:   "database-url",
@@ -123,11 +135,13 @@ func runServer(c *cli.Context) {
 		Debug:     c.Bool("debug"),
 		SentryDSN: c.String("sentry-dsn"),
 
-		VSphereURL:                  c.String("vsphere-api-url"),
-		VSphereBasePath:             c.String("vsphere-base-path"),
-		VSphereVMPath:               c.String("vsphere-vm-path"),
-		VSphereClusterPath:          c.String("vsphere-cluster-path"),
-		VSphereConcurrentOperations: c.Int("vsphere-concurrent-operations"),
+		VSphereURL:                        c.String("vsphere-api-url"),
+		VSphereBasePath:                   c.String("vsphere-base-path"),
+		VSphereVMPath:                     c.String("vsphere-vm-path"),
+		VSphereClusterPath:                c.String("vsphere-cluster-path"),
+		VSphereConcurrentReadOperations:   c.Int("vsphere-concurrent-read-operations"),
+		VSphereConcurrentCreateOperations: c.Int("vsphere-concurrent-create-operations"),
+		VSphereConcurrentDeleteOperations: c.Int("vsphere-concurrent-delete-operations"),
 
 		DatabaseURL: c.String("database-url"),
 	})
