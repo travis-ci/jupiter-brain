@@ -151,20 +151,22 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 	if err != nil {
 		return nil, errors.Wrap(err, "timed out waiting for concurrency semaphore")
 	}
-	defer releaseSem()
 
 	client, err := i.client(ctx)
 	if err != nil {
+		releaseSem()
 		return nil, err
 	}
 
 	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, baseName)
 	if err != nil {
+		releaseSem()
 		return nil, errors.Wrap(err, "failed to find base VM and snapshot")
 	}
 
 	resourcePool, err := i.resourcePool(ctx)
 	if err != nil {
+		releaseSem()
 		return nil, errors.Wrap(err, "failed to find resource pool")
 	}
 
@@ -184,58 +186,82 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	vmFolder, err := i.vmFolder(ctx)
 	if err != nil {
+		releaseSem()
 		return nil, err
 	}
 
 	cloneStartTime := time.Now()
 	task, err := vm.Clone(ctx, vmFolder, name.String(), cloneSpec)
 	if err != nil {
+		releaseSem()
 		go i.terminateIfExists(ctx, name.String())
 		return nil, errors.Wrap(err, "failed to create vm clone task")
 	}
 
-	err = task.Wait(ctx)
-	if err != nil {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Wrap(err, "vm clone task failed")
+	errChan := make(chan error, 1)
+	vmChan := make(chan *object.VirtualMachine, 1)
+
+	go func() {
+		defer releaseSem()
+
+		err := task.Wait(context.Background())
+		if err != nil {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Wrap(err, "vm clone task failed")
+			return
+		}
+		metrics.TimeSince("travis.jupiter-brain.tasks.clone", cloneStartTime)
+
+		var mt mo.Task
+		err = task.Properties(ctx, task.Reference(), []string{"info"}, &mt)
+		if err != nil {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Wrap(err, "failed to get vm info properties")
+			return
+		}
+
+		if mt.Info.Result == nil {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Errorf("expected VM, but got nil")
+			return
+		}
+
+		vmManagedRef, ok := mt.Info.Result.(types.ManagedObjectReference)
+		if !ok {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
+			return
+		}
+
+		newVM := object.NewVirtualMachine(client.Client, vmManagedRef)
+
+		powerOnStartTime := time.Now()
+		task, err = newVM.PowerOn(ctx)
+		if err != nil {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Wrap(err, "failed to create vm power on task")
+			return
+		}
+
+		err = task.Wait(context.Background())
+		if err != nil {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Wrap(err, "vm power on task failed")
+			return
+		}
+		metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
+
+		vmChan <- newVM
+	}()
+
+	select {
+	case vm := <-vmChan:
+		return i.instanceForVirtualMachine(ctx, vm)
+	case err := <-errChan:
+		return nil, err
+	case <-ctx.Done():
+		return nil, errors.Wrap(ctx.Err(), "context finished while waiting for VM clone and power on")
 	}
-	metrics.TimeSince("travis.jupiter-brain.tasks.clone", cloneStartTime)
-
-	var mt mo.Task
-	err = task.Properties(ctx, task.Reference(), []string{"info"}, &mt)
-	if err != nil {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Wrap(err, "failed to get vm info properties")
-	}
-
-	if mt.Info.Result == nil {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Errorf("expected VM, but got nil")
-	}
-
-	vmManagedRef, ok := mt.Info.Result.(types.ManagedObjectReference)
-	if !ok {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
-	}
-
-	newVM := object.NewVirtualMachine(client.Client, vmManagedRef)
-
-	powerOnStartTime := time.Now()
-	task, err = newVM.PowerOn(ctx)
-	if err != nil {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Wrap(err, "failed to create vm power on task")
-	}
-
-	err = task.Wait(ctx)
-	if err != nil {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Wrap(err, "vm power on task failed")
-	}
-	metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
-
-	return i.instanceForVirtualMachine(ctx, newVM)
 }
 
 func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error {
@@ -243,10 +269,10 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 	if err != nil {
 		return errors.Wrap(err, "timed out waiting for concurrency semaphore")
 	}
-	defer releaseSem()
 
 	client, err := i.client(ctx)
 	if err != nil {
+		releaseSem()
 		return err
 	}
 
@@ -254,34 +280,51 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 
 	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.VMPath+id)
 	if err != nil {
+		releaseSem()
 		return errors.Wrap(err, "failed to search for vm")
 	}
 
 	if vmRef == nil {
+		releaseSem()
 		return VirtualMachineNotFoundError{Path: i.paths.VMPath, ID: id}
 	}
 
 	vm, ok := vmRef.(*object.VirtualMachine)
 	if !ok {
+		releaseSem()
 		return errors.New("not a VM")
 	}
 
 	task, err := vm.PowerOff(ctx)
 	if err != nil {
+		releaseSem()
 		return errors.Wrap(err, "failed to create vm power off task")
 	}
 
-	// Ignore error since the VM may already be powered off. vm.Destroy will fail
-	// if the VM is still powered on.
-	_ = task.Wait(ctx)
+	errChan := make(chan error, 1)
+	go func() {
+		defer releaseSem()
 
-	task, err = vm.Destroy(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to create vm destroy task")
+		// Ignore error since the VM may already be powered off. vm.Destroy will fail
+		// if the VM is still powered on.
+		_ = task.Wait(context.Background())
+
+		task, err = vm.Destroy(context.Background())
+		if err != nil {
+			errChan <- errors.Wrap(err, "failed to create vm destroy task")
+			return
+		}
+
+		err = task.Wait(context.Background())
+		errChan <- errors.Wrap(err, "vm destroy task failed")
+	}()
+
+	select {
+	case err := <-errChan:
+		return err
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "context finished while waiting for VM power off and destroy")
 	}
-
-	err = task.Wait(ctx)
-	return errors.Wrap(err, "vm destroy task failed")
 }
 
 // Terminate the VM if it exists
