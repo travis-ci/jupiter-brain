@@ -151,22 +151,25 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 	if err != nil {
 		return nil, errors.Wrap(err, "timed out waiting for concurrency semaphore")
 	}
+	autoreleaseSem := true
+	defer func() {
+		if autoreleaseSem {
+			releaseSem()
+		}
+	}()
 
 	client, err := i.client(ctx)
 	if err != nil {
-		releaseSem()
 		return nil, err
 	}
 
 	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, baseName)
 	if err != nil {
-		releaseSem()
 		return nil, errors.Wrap(err, "failed to find base VM and snapshot")
 	}
 
 	resourcePool, err := i.resourcePool(ctx)
 	if err != nil {
-		releaseSem()
 		return nil, errors.Wrap(err, "failed to find resource pool")
 	}
 
@@ -186,14 +189,12 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	vmFolder, err := i.vmFolder(ctx)
 	if err != nil {
-		releaseSem()
 		return nil, err
 	}
 
 	cloneStartTime := time.Now()
 	task, err := vm.Clone(ctx, vmFolder, name.String(), cloneSpec)
 	if err != nil {
-		releaseSem()
 		go i.terminateIfExists(ctx, name.String())
 		return nil, errors.Wrap(err, "failed to create vm clone task")
 	}
@@ -201,6 +202,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 	errChan := make(chan error, 1)
 	vmChan := make(chan *object.VirtualMachine, 1)
 
+	autoreleaseSem = false
 	go func() {
 		defer releaseSem()
 
@@ -269,10 +271,15 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 	if err != nil {
 		return errors.Wrap(err, "timed out waiting for concurrency semaphore")
 	}
+	autoreleaseSem := true
+	defer func() {
+		if autoreleaseSem {
+			releaseSem()
+		}
+	}()
 
 	client, err := i.client(ctx)
 	if err != nil {
-		releaseSem()
 		return err
 	}
 
@@ -280,28 +287,26 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 
 	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.VMPath+id)
 	if err != nil {
-		releaseSem()
 		return errors.Wrap(err, "failed to search for vm")
 	}
 
 	if vmRef == nil {
-		releaseSem()
 		return VirtualMachineNotFoundError{Path: i.paths.VMPath, ID: id}
 	}
 
 	vm, ok := vmRef.(*object.VirtualMachine)
 	if !ok {
-		releaseSem()
 		return errors.New("not a VM")
 	}
 
 	task, err := vm.PowerOff(ctx)
 	if err != nil {
-		releaseSem()
 		return errors.Wrap(err, "failed to create vm power off task")
 	}
 
 	errChan := make(chan error, 1)
+
+	autoreleaseSem = false
 	go func() {
 		defer releaseSem()
 
