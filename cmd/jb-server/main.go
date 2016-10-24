@@ -59,19 +59,19 @@ func main() {
 		},
 		cli.IntFlag{
 			Name:   "vsphere-concurrent-read-operations",
-			Usage:  "number of concurrent read vSphere operations",
+			Usage:  "number of concurrent fetch and list operations",
 			EnvVar: "JUPITER_BRAIN_VSPHERE_CONCURRENT_READ_OPERATIONS",
 			Value:  4,
 		},
 		cli.IntFlag{
 			Name:   "vsphere-concurrent-create-operations",
-			Usage:  "number of concurrent create vSphere operations",
+			Usage:  "number of concurrent start operations",
 			EnvVar: "JUPITER_BRAIN_VSPHERE_CONCURRENT_CREATE_OPERATIONS",
 			Value:  48,
 		},
 		cli.IntFlag{
 			Name:   "vsphere-concurrent-delete-operations",
-			Usage:  "number of concurrent delete vSphere operations",
+			Usage:  "number of concurrent terminate operations",
 			EnvVar: "JUPITER_BRAIN_VSPHERE_CONCURRENT_DELETE_OPERATIONS",
 			Value:  48,
 		},
