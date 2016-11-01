@@ -21,6 +21,13 @@ type Config struct {
 	VSphereVMPath      string
 	VSphereClusterPath string
 
+	// The VSphereConcurrent*Operations attributes specify the number of
+	// concurrent read, create and delete operations Jupiter Brain has with
+	// vSphere at any given time.
+	VSphereConcurrentReadOperations   int
+	VSphereConcurrentCreateOperations int
+	VSphereConcurrentDeleteOperations int
+
 	// SentryDSN is used to send errors to Sentry. Leave this blank to not
 	// send errors.
 	SentryDSN string

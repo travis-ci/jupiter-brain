@@ -23,6 +23,10 @@ import (
 type vSphereInstanceManager struct {
 	log *logrus.Logger
 
+	readConcurrencySem   chan struct{}
+	createConcurrencySem chan struct{}
+	deleteConcurrencySem chan struct{}
+
 	vSphereClientMutex sync.Mutex
 	vSphereClient      *govmomi.Client
 
@@ -65,15 +69,24 @@ type VSpherePaths struct {
 }
 
 // NewVSphereInstanceManager creates a new instance manager backed by vSphere
-func NewVSphereInstanceManager(log *logrus.Logger, vSphereURL *url.URL, paths VSpherePaths) InstanceManager {
+func NewVSphereInstanceManager(log *logrus.Logger, vSphereURL *url.URL, paths VSpherePaths, readConcurrency, createConcurrency, deleteConcurrency int) InstanceManager {
 	return &vSphereInstanceManager{
-		log:        log,
-		vSphereURL: vSphereURL,
-		paths:      paths,
+		log:                  log,
+		vSphereURL:           vSphereURL,
+		paths:                paths,
+		readConcurrencySem:   make(chan struct{}, readConcurrency),
+		createConcurrencySem: make(chan struct{}, createConcurrency),
+		deleteConcurrencySem: make(chan struct{}, deleteConcurrency),
 	}
 }
 
 func (i *vSphereInstanceManager) Fetch(ctx context.Context, id string) (*Instance, error) {
+	releaseSem, err := i.requestReadSemaphore(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "timed out waiting for concurrency semaphore")
+	}
+	defer releaseSem()
+
 	client, err := i.client(ctx)
 	if err != nil {
 		return nil, err
@@ -99,6 +112,12 @@ func (i *vSphereInstanceManager) Fetch(ctx context.Context, id string) (*Instanc
 }
 
 func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) {
+	releaseSem, err := i.requestReadSemaphore(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "timed out waiting for concurrency semaphore")
+	}
+	defer releaseSem()
+
 	folder, err := i.vmFolder(ctx)
 	if err != nil {
 		return nil, err
@@ -128,6 +147,17 @@ func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) 
 }
 
 func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*Instance, error) {
+	releaseSem, err := i.requestCreateSemaphore(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "timed out waiting for concurrency semaphore")
+	}
+	autoreleaseSem := true
+	defer func() {
+		if autoreleaseSem {
+			releaseSem()
+		}
+	}()
+
 	client, err := i.client(ctx)
 	if err != nil {
 		return nil, err
@@ -169,51 +199,85 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		return nil, errors.Wrap(err, "failed to create vm clone task")
 	}
 
-	err = task.Wait(ctx)
-	if err != nil {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Wrap(err, "vm clone task failed")
+	errChan := make(chan error, 1)
+	vmChan := make(chan *object.VirtualMachine, 1)
+
+	autoreleaseSem = false
+	go func() {
+		defer releaseSem()
+
+		err := task.Wait(context.Background())
+		if err != nil {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Wrap(err, "vm clone task failed")
+			return
+		}
+		metrics.TimeSince("travis.jupiter-brain.tasks.clone", cloneStartTime)
+
+		var mt mo.Task
+		err = task.Properties(ctx, task.Reference(), []string{"info"}, &mt)
+		if err != nil {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Wrap(err, "failed to get vm info properties")
+			return
+		}
+
+		if mt.Info.Result == nil {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Errorf("expected VM, but got nil")
+			return
+		}
+
+		vmManagedRef, ok := mt.Info.Result.(types.ManagedObjectReference)
+		if !ok {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
+			return
+		}
+
+		newVM := object.NewVirtualMachine(client.Client, vmManagedRef)
+
+		powerOnStartTime := time.Now()
+		task, err = newVM.PowerOn(ctx)
+		if err != nil {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Wrap(err, "failed to create vm power on task")
+			return
+		}
+
+		err = task.Wait(context.Background())
+		if err != nil {
+			go i.terminateIfExists(ctx, name.String())
+			errChan <- errors.Wrap(err, "vm power on task failed")
+			return
+		}
+		metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
+
+		vmChan <- newVM
+	}()
+
+	select {
+	case vm := <-vmChan:
+		return i.instanceForVirtualMachine(ctx, vm)
+	case err := <-errChan:
+		return nil, err
+	case <-ctx.Done():
+		return nil, errors.Wrap(ctx.Err(), "context finished while waiting for VM clone and power on")
 	}
-	metrics.TimeSince("travis.jupiter-brain.tasks.clone", cloneStartTime)
-
-	var mt mo.Task
-	err = task.Properties(ctx, task.Reference(), []string{"info"}, &mt)
-	if err != nil {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Wrap(err, "failed to get vm info properties")
-	}
-
-	if mt.Info.Result == nil {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Errorf("expected VM, but got nil")
-	}
-
-	vmManagedRef, ok := mt.Info.Result.(types.ManagedObjectReference)
-	if !ok {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
-	}
-
-	newVM := object.NewVirtualMachine(client.Client, vmManagedRef)
-
-	powerOnStartTime := time.Now()
-	task, err = newVM.PowerOn(ctx)
-	if err != nil {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Wrap(err, "failed to create vm power on task")
-	}
-
-	err = task.Wait(ctx)
-	if err != nil {
-		go i.terminateIfExists(ctx, name.String())
-		return nil, errors.Wrap(err, "vm power on task failed")
-	}
-	metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
-
-	return i.instanceForVirtualMachine(ctx, newVM)
 }
 
 func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error {
+	releaseSem, err := i.requestDeleteSemaphore(ctx)
+	if err != nil {
+		return errors.Wrap(err, "timed out waiting for concurrency semaphore")
+	}
+	autoreleaseSem := true
+	defer func() {
+		if autoreleaseSem {
+			releaseSem()
+		}
+	}()
+
 	client, err := i.client(ctx)
 	if err != nil {
 		return err
@@ -240,17 +304,32 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 		return errors.Wrap(err, "failed to create vm power off task")
 	}
 
-	// Ignore error since the VM may already be powered off. vm.Destroy will fail
-	// if the VM is still powered on.
-	_ = task.Wait(ctx)
+	errChan := make(chan error, 1)
 
-	task, err = vm.Destroy(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to create vm destroy task")
+	autoreleaseSem = false
+	go func() {
+		defer releaseSem()
+
+		// Ignore error since the VM may already be powered off. vm.Destroy will fail
+		// if the VM is still powered on.
+		_ = task.Wait(context.Background())
+
+		task, err = vm.Destroy(context.Background())
+		if err != nil {
+			errChan <- errors.Wrap(err, "failed to create vm destroy task")
+			return
+		}
+
+		err = task.Wait(context.Background())
+		errChan <- errors.Wrap(err, "vm destroy task failed")
+	}()
+
+	select {
+	case err := <-errChan:
+		return err
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "context finished while waiting for VM power off and destroy")
 	}
-
-	err = task.Wait(ctx)
-	return errors.Wrap(err, "vm destroy task failed")
 }
 
 // Terminate the VM if it exists
@@ -461,4 +540,34 @@ func (i *vSphereInstanceManager) instanceForVirtualMachine(ctx context.Context, 
 		IPAddresses: ipAddresses,
 		State:       string(mvm.Runtime.PowerState),
 	}, nil
+}
+
+func (i *vSphereInstanceManager) requestReadSemaphore(ctx context.Context) (func(), error) {
+	metrics.Gauge("travis.jupiter-brain.semaphore.read.waiting", int64(len(i.readConcurrencySem)))
+	defer metrics.TimeSince("travis.jupiter-brain.semaphore.read.wait-time", time.Now())
+
+	return i.requestSemaphore(ctx, i.readConcurrencySem)
+}
+
+func (i *vSphereInstanceManager) requestCreateSemaphore(ctx context.Context) (func(), error) {
+	metrics.Gauge("travis.jupiter-brain.semaphore.create.waiting", int64(len(i.createConcurrencySem)))
+	defer metrics.TimeSince("travis.jupiter-brain.semaphore.create.wait-time", time.Now())
+
+	return i.requestSemaphore(ctx, i.createConcurrencySem)
+}
+
+func (i *vSphereInstanceManager) requestDeleteSemaphore(ctx context.Context) (func(), error) {
+	metrics.Gauge("travis.jupiter-brain.semaphore.delete.waiting", int64(len(i.deleteConcurrencySem)))
+	defer metrics.TimeSince("travis.jupiter-brain.semaphore.delete.wait-time", time.Now())
+
+	return i.requestSemaphore(ctx, i.deleteConcurrencySem)
+}
+
+func (i *vSphereInstanceManager) requestSemaphore(ctx context.Context, semaphore chan struct{}) (func(), error) {
+	select {
+	case semaphore <- struct{}{}:
+		return func() { <-semaphore }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
