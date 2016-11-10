@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
@@ -39,6 +40,8 @@ type server struct {
 
 	db       database
 	bootTime time.Time
+
+	enablePprof bool
 }
 
 func newServer(cfg *Config) (*server, error) {
@@ -94,6 +97,8 @@ func newServer(cfg *Config) (*server, error) {
 
 		db:       db,
 		bootTime: time.Now().UTC(),
+
+		enablePprof: cfg.EnablePprof,
 	}
 
 	return srv, nil
@@ -121,6 +126,14 @@ func (srv *server) setupRoutes() {
 	srv.r.HandleFunc(`/instances/{id}`, srv.handleInstanceByIDFetch).Methods("GET").Name("instance-by-id")
 	srv.r.HandleFunc(`/instances/{id}`, srv.handleInstanceByIDTerminate).Methods("DELETE").Name("instance-by-id-terminate")
 	srv.r.HandleFunc(`/instance-syncs`, srv.handleInstanceSync).Methods("POST").Name("instance-syncs-create")
+
+	if srv.enablePprof {
+		srv.r.HandleFunc(`/debug/pprof/`, pprof.Index).Name("pprof-index")
+		srv.r.HandleFunc(`/debug/pprof/cmdline`, pprof.Cmdline).Name("pprof-cmdline")
+		srv.r.HandleFunc(`/debug/pprof/profile`, pprof.Profile).Name("pprof-profile")
+		srv.r.HandleFunc(`/debug/pprof/symbol`, pprof.Symbol).Name("pprof-symbol")
+		srv.r.HandleFunc(`/debug/pprof/trace`, pprof.Trace).Name("pprof-trace")
+	}
 }
 
 func (srv *server) setupMiddleware() {
