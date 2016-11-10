@@ -34,4 +34,8 @@ type Config struct {
 
 	// DatabaseURL is the PostgreSQL database URL wow!
 	DatabaseURL string
+
+	// EnablePprof toggles whether the pprof endpoints from net/http/pprof
+	// should be enabled or not
+	EnablePprof bool
 }

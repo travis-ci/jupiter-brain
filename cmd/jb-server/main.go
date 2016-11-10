@@ -105,6 +105,11 @@ func main() {
 			Usage:  "The source to use when sending metrics to Librato",
 			EnvVar: "JUPITER_BRAIN_LIBRATO_SOURCE,LIBRATO_SOURCE",
 		},
+		cli.BoolFlag{
+			Name:   "enable-pprof",
+			Usage:  "Whether to enable pprof endpoints over HTTP",
+			EnvVar: "JUPITER_BRAIN_ENABLE_PPROF",
+		},
 	}
 	app.Action = runServer
 
@@ -144,5 +149,7 @@ func runServer(c *cli.Context) {
 		VSphereConcurrentDeleteOperations: c.Int("vsphere-concurrent-delete-operations"),
 
 		DatabaseURL: c.String("database-url"),
+
+		EnablePprof: c.Bool("enable-pprof"),
 	})
 }
