@@ -147,6 +147,8 @@ func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) 
 }
 
 func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*Instance, error) {
+	startTime := time.Now()
+
 	releaseSem, err := i.requestCreateSemaphore(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "timed out waiting for concurrency semaphore")
@@ -252,6 +254,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 			return
 		}
 		metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
+		metrics.TimeSince("travis.jupiter-brain.tasks.full-start", startTime)
 
 		vmChan <- newVM
 	}()
