@@ -105,10 +105,10 @@ func main() {
 			Usage:  "The source to use when sending metrics to Librato",
 			EnvVar: "JUPITER_BRAIN_LIBRATO_SOURCE,LIBRATO_SOURCE",
 		},
-		cli.BoolFlag{
-			Name:   "enable-pprof",
+		cli.StringFlag{
+			Name:   "pprof-addr",
 			Usage:  "Whether to enable pprof endpoints over HTTP",
-			EnvVar: "JUPITER_BRAIN_ENABLE_PPROF",
+			EnvVar: "JUPITER_BRAIN_PPROF_ADDR",
 		},
 	}
 	app.Action = runServer
@@ -150,6 +150,6 @@ func runServer(c *cli.Context) {
 
 		DatabaseURL: c.String("database-url"),
 
-		EnablePprof: c.Bool("enable-pprof"),
+		PprofAddr: c.String("pprof-addr"),
 	})
 }
