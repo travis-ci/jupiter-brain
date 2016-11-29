@@ -41,7 +41,7 @@ type server struct {
 	db       database
 	bootTime time.Time
 
-	enablePprof bool
+	pprofAddr string
 }
 
 func newServer(cfg *Config) (*server, error) {
@@ -98,7 +98,7 @@ func newServer(cfg *Config) (*server, error) {
 		db:       db,
 		bootTime: time.Now().UTC(),
 
-		enablePprof: cfg.EnablePprof,
+		pprofAddr: cfg.PprofAddr,
 	}
 
 	return srv, nil
@@ -107,6 +107,9 @@ func newServer(cfg *Config) (*server, error) {
 func (srv *server) Setup() {
 	srv.setupRoutes()
 	srv.setupMiddleware()
+	if srv.pprofAddr != "" {
+		srv.setupPprof()
+	}
 	go srv.signalHandler()
 }
 
@@ -126,19 +129,12 @@ func (srv *server) setupRoutes() {
 	srv.r.HandleFunc(`/instances/{id}`, srv.handleInstanceByIDFetch).Methods("GET").Name("instance-by-id")
 	srv.r.HandleFunc(`/instances/{id}`, srv.handleInstanceByIDTerminate).Methods("DELETE").Name("instance-by-id-terminate")
 	srv.r.HandleFunc(`/instance-syncs`, srv.handleInstanceSync).Methods("POST").Name("instance-syncs-create")
-
-	if srv.enablePprof {
-		srv.r.HandleFunc(`/debug/pprof/`, pprof.Index).Name("pprof-index")
-		srv.r.HandleFunc(`/debug/pprof/cmdline`, pprof.Cmdline).Name("pprof-cmdline")
-		srv.r.HandleFunc(`/debug/pprof/profile`, pprof.Profile).Name("pprof-profile")
-		srv.r.HandleFunc(`/debug/pprof/symbol`, pprof.Symbol).Name("pprof-symbol")
-		srv.r.HandleFunc(`/debug/pprof/trace`, pprof.Trace).Name("pprof-trace")
-	}
 }
 
 func (srv *server) setupMiddleware() {
 	srv.n.Use(negroni.NewRecovery())
 	srv.n.Use(negronilogrus.NewCustomMiddleware(srv.log.Level, srv.log.Formatter, "web"))
+
 	srv.n.Use(negroni.HandlerFunc(srv.authMiddleware))
 	nr, err := negroniraven.NewMiddleware(srv.sentryDSN)
 	if err != nil {
@@ -146,6 +142,22 @@ func (srv *server) setupMiddleware() {
 	}
 	srv.n.Use(nr)
 	srv.n.UseHandler(srv.r)
+}
+
+func (srv *server) setupPprof() {
+	pprofMux := http.NewServeMux()
+	pprofMux.HandleFunc(`/debug/pprof/`, pprof.Index)
+	pprofMux.HandleFunc(`/debug/pprof/cmdline`, pprof.Cmdline)
+	pprofMux.HandleFunc(`/debug/pprof/profile`, pprof.Profile)
+	pprofMux.HandleFunc(`/debug/pprof/symbol`, pprof.Symbol)
+	pprofMux.HandleFunc(`/debug/pprof/trace`, pprof.Trace)
+
+	pprofServer := &http.Server{
+		Addr:    srv.pprofAddr,
+		Handler: pprofMux,
+	}
+
+	go pprofServer.ListenAndServe()
 }
 
 func (srv *server) authMiddleware(w http.ResponseWriter, req *http.Request, f http.HandlerFunc) {
