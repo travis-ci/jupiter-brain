@@ -1,6 +1,6 @@
 package jupiterbrain
 
-import "golang.org/x/net/context"
+import "context"
 
 // InstanceManager is the interface used for managing instances wow!
 type InstanceManager interface {
