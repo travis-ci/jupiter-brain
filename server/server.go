@@ -144,6 +144,8 @@ func (srv *server) setupMiddleware() {
 }
 
 func (srv *server) setupPprof() {
+	srv.log.WithField("addr", srv.pprofAddr).Info("enabling pprof")
+
 	pprofMux := http.NewServeMux()
 	pprofMux.HandleFunc(`/debug/pprof/`, pprof.Index)
 	pprofMux.HandleFunc(`/debug/pprof/cmdline`, pprof.Cmdline)
