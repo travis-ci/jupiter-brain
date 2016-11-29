@@ -1,12 +1,12 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/travis-ci/jupiter-brain"
-	"golang.org/x/net/context"
 )
 
 type fakeInstanceManager struct{}
