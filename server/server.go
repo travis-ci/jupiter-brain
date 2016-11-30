@@ -41,7 +41,8 @@ type server struct {
 	db       database
 	bootTime time.Time
 
-	pprofAddr string
+	pprofAddr      string
+	requestTimeout time.Duration
 }
 
 func newServer(cfg *Config) (*server, error) {
@@ -98,7 +99,8 @@ func newServer(cfg *Config) (*server, error) {
 		db:       db,
 		bootTime: time.Now().UTC(),
 
-		pprofAddr: cfg.PprofAddr,
+		pprofAddr:      cfg.PprofAddr,
+		requestTimeout: cfg.RequestTimeout,
 	}
 
 	return srv, nil
@@ -116,7 +118,7 @@ func (srv *server) Setup() {
 func (srv *server) Run() {
 	srv.log.WithField("addr", srv.addr).Info("Listening")
 	srv.s.Addr = srv.addr
-	srv.s.Handler = http.TimeoutHandler(srv.n, 3*time.Minute, "request timed out")
+	srv.s.Handler = http.TimeoutHandler(srv.n, srv.requestTimeout, "request timed out")
 	err := srv.s.ListenAndServe()
 	if err != nil {
 		srv.log.WithField("err", err).Error("ListenAndServe failed")
