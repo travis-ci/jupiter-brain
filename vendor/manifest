@@ -129,10 +129,10 @@
 		},
 		{
 			"importpath": "github.com/vmware/govmomi",
-			"repository": "https://github.com/henrikhodne/govmomi",
+			"repository": "https://github.com/vmware/govmomi",
 			"vcs": "git",
-			"revision": "1fba1af72da4c79f48f660cc7b321de036294324",
-			"branch": "hh/http-context-cancellation",
+			"revision": "2cbad5127c61e13d72165f954543a7265625bebb",
+			"branch": "master",
 			"notests": true
 		}
 	]
