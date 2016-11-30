@@ -208,7 +208,13 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 	go func() {
 		defer releaseSem()
 
-		err := task.Wait(context.Background())
+		// Set up a different context to prevent the goroutine from being
+		// cancelled by the HTTP request finishing, since that would lead to a
+		// leaked VMs
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		err := task.Wait(ctx)
 		if err != nil {
 			go i.terminateIfExists(ctx, name.String())
 			errChan <- errors.Wrap(err, "vm clone task failed")
@@ -247,7 +253,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 			return
 		}
 
-		err = task.Wait(context.Background())
+		err = task.Wait(ctx)
 		if err != nil {
 			go i.terminateIfExists(ctx, name.String())
 			errChan <- errors.Wrap(err, "vm power on task failed")
@@ -313,17 +319,23 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 	go func() {
 		defer releaseSem()
 
+		// Set up a different context to prevent the goroutine from being
+		// cancelled by the HTTP request finishing, since that would lead to a
+		// leaked VMs
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
 		// Ignore error since the VM may already be powered off. vm.Destroy will fail
 		// if the VM is still powered on.
-		_ = task.Wait(context.Background())
+		_ = task.Wait(ctx)
 
-		task, err = vm.Destroy(context.Background())
+		task, err = vm.Destroy(ctx)
 		if err != nil {
 			errChan <- errors.Wrap(err, "failed to create vm destroy task")
 			return
 		}
 
-		err = task.Wait(context.Background())
+		err = task.Wait(ctx)
 		errChan <- errors.Wrap(err, "vm destroy task failed")
 	}()
 
