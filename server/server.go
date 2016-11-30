@@ -134,6 +134,7 @@ func (srv *server) setupRoutes() {
 func (srv *server) setupMiddleware() {
 	srv.n.Use(negroni.NewRecovery())
 	srv.n.Use(negronilogrus.NewCustomMiddleware(srv.log.Level, srv.log.Formatter, "web"))
+	srv.n.UseFunc(ResponseMetricsHandler)
 	srv.n.Use(negroni.HandlerFunc(srv.authMiddleware))
 	nr, err := negroniraven.NewMiddleware(srv.sentryDSN)
 	if err != nil {
