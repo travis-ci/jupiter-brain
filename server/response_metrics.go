@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/travis-ci/worker/metrics"
+	"github.com/travis-ci/jupiter-brain/metrics"
 )
 
 type metricsResponseWriter struct {
