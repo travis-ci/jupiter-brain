@@ -211,56 +211,68 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		// Set up a different context to prevent the goroutine from being
 		// cancelled by the HTTP request finishing, since that would lead to a
 		// leaked VMs
-		ctx, cancel := context.WithCancel(context.Background())
+		backgroundCtx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		err := task.Wait(ctx)
+		err := task.Wait(backgroundCtx)
 		if err != nil {
-			go i.terminateIfExists(ctx, name.String())
+			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Wrap(err, "vm clone task failed")
 			return
 		}
 		metrics.TimeSince("travis.jupiter-brain.tasks.clone", cloneStartTime)
 
 		var mt mo.Task
-		err = task.Properties(ctx, task.Reference(), []string{"info"}, &mt)
+		err = task.Properties(backgroundCtx, task.Reference(), []string{"info"}, &mt)
 		if err != nil {
-			go i.terminateIfExists(ctx, name.String())
+			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Wrap(err, "failed to get vm info properties")
 			return
 		}
 
 		if mt.Info.Result == nil {
-			go i.terminateIfExists(ctx, name.String())
+			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Errorf("expected VM, but got nil")
 			return
 		}
 
 		vmManagedRef, ok := mt.Info.Result.(types.ManagedObjectReference)
 		if !ok {
-			go i.terminateIfExists(ctx, name.String())
+			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
 			return
 		}
 
 		newVM := object.NewVirtualMachine(client.Client, vmManagedRef)
 
+		if ctx.Err() != nil {
+			// The HTTP context is cancelled, so let's delete the VM we just cloned instead of powering it on
+			errChan <- errors.Wrap(i.Terminate(backgroundCtx, name.String()), "error while trying to delete abandoned VM")
+			return
+		}
+
 		powerOnStartTime := time.Now()
-		task, err = newVM.PowerOn(ctx)
+		task, err = newVM.PowerOn(backgroundCtx)
 		if err != nil {
-			go i.terminateIfExists(ctx, name.String())
+			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Wrap(err, "failed to create vm power on task")
 			return
 		}
 
-		err = task.Wait(ctx)
+		err = task.Wait(backgroundCtx)
 		if err != nil {
-			go i.terminateIfExists(ctx, name.String())
+			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Wrap(err, "vm power on task failed")
 			return
 		}
 		metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
 		metrics.TimeSince("travis.jupiter-brain.tasks.full-start", startTime)
+
+		if ctx.Err() != nil {
+			// The HTTP context is cancelled, so let's delete the VM we just cloned instead of returning it
+			errChan <- errors.Wrap(i.Terminate(backgroundCtx, name.String()), "error while trying to delete abandoned VM")
+			return
+		}
 
 		vmChan <- newVM
 	}()
