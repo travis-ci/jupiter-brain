@@ -1,5 +1,7 @@
 package server
 
+import "time"
+
 // Config contains everything needed to run the API server.
 type Config struct {
 	// Addr is the address the API should listen on.
@@ -38,4 +40,8 @@ type Config struct {
 	// PprofAddr should be a non-empty string specifying where to bind
 	// net/http/pprof endpoints
 	PprofAddr string
+
+	// RequestTimeout is the maximum amount of time a request is allowed to
+	// take
+	RequestTimeout time.Duration
 }

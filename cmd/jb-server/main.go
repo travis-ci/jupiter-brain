@@ -110,6 +110,12 @@ func main() {
 			Usage:  "Whether to enable pprof endpoints over HTTP",
 			EnvVar: "JUPITER_BRAIN_PPROF_ADDR",
 		},
+		cli.DurationFlag{
+			Name:   "request-timeout",
+			Usage:  "The max time an incoming HTTP request can take before timing out",
+			EnvVar: "JUPITER_BRAIN_REQUEST_TIMEOUT",
+			Value:  3 * time.Minute,
+		},
 	}
 	app.Action = runServer
 
@@ -150,6 +156,7 @@ func runServer(c *cli.Context) {
 
 		DatabaseURL: c.String("database-url"),
 
-		PprofAddr: c.String("pprof-addr"),
+		PprofAddr:      c.String("pprof-addr"),
+		RequestTimeout: c.Duration("request-timeout"),
 	})
 }
