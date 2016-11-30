@@ -93,7 +93,7 @@ func newServer(cfg *Config) (*server, error) {
 		r: mux.NewRouter(),
 		s: manners.NewWithServer(&http.Server{
 			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 3 * time.Minute,
+			WriteTimeout: cfg.RequestTimeout + 10*time.Second,
 		}),
 
 		db:       db,
