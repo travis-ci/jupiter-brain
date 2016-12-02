@@ -17,6 +17,14 @@
 			"notests": true
 		},
 		{
+			"importpath": "github.com/certifi/gocertifi",
+			"repository": "https://github.com/certifi/gocertifi",
+			"vcs": "git",
+			"revision": "a61bf5eafa3aee233ec8043e9da052447e5463dd",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/codegangsta/cli",
 			"repository": "https://github.com/codegangsta/cli",
 			"vcs": "",
@@ -42,9 +50,10 @@
 		{
 			"importpath": "github.com/getsentry/raven-go",
 			"repository": "https://github.com/getsentry/raven-go",
-			"vcs": "",
-			"revision": "3fd636ed242c26c0f55bc9ee1fe47e1d6d2d77f7",
-			"branch": "HEAD"
+			"vcs": "git",
+			"revision": "3f7439d3e74d88e21d196ba20eb61a5a958bc118",
+			"branch": "master",
+			"notests": true
 		},
 		{
 			"importpath": "github.com/gorilla/context",
