@@ -6,6 +6,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
+	raven "github.com/getsentry/raven-go"
 	librato "github.com/mihasya/go-metrics-librato"
 	metrics "github.com/rcrowley/go-metrics"
 	travismetrics "github.com/travis-ci/jupiter-brain/metrics"
@@ -139,6 +140,8 @@ func runServer(c *cli.Context) {
 		)
 	}
 	go travismetrics.ReportMemstatsMetrics()
+
+	raven.SetDSN(c.String("sentry-dsn"))
 
 	server.Main(&server.Config{
 		Addr:      c.String("addr"),
