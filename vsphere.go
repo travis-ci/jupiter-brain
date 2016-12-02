@@ -2,6 +2,7 @@ package jupiterbrain
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"reflect"
 	"sync"
@@ -219,7 +220,16 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		if err != nil {
 			go i.terminateIfExists(backgroundCtx, name.String())
 			if err != context.Canceled && err != context.DeadlineExceeded {
-				raven.CaptureError(err, map[string]string{"vm-name": name.String(), "task": "clone"})
+				var interfaces []raven.Interface
+
+				faultCause := getFaultCause(err)
+				if faultCause != "" {
+					interfaces = append(interfaces, &raven.Message{
+						Message: fmt.Sprintf("faultCause: %s", faultCause),
+					})
+				}
+
+				raven.CaptureError(err, map[string]string{"vm-name": name.String(), "task": "clone"}, interfaces...)
 			}
 			errChan <- errors.Wrap(err, "vm clone task failed")
 			return
@@ -267,7 +277,16 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		if err != nil {
 			go i.terminateIfExists(backgroundCtx, name.String())
 			if err != context.Canceled && err != context.DeadlineExceeded {
-				raven.CaptureError(err, map[string]string{"vm-name": name.String(), "task": "power-on"})
+				var interfaces []raven.Interface
+
+				faultCause := getFaultCause(err)
+				if faultCause != "" {
+					interfaces = append(interfaces, &raven.Message{
+						Message: fmt.Sprintf("faultCause: %s", faultCause),
+					})
+				}
+
+				raven.CaptureError(err, map[string]string{"vm-name": name.String(), "task": "power-on"}, interfaces...)
 			}
 			errChan <- errors.Wrap(err, "vm power on task failed")
 			return
@@ -604,4 +623,30 @@ func (i *vSphereInstanceManager) requestSemaphore(ctx context.Context, semaphore
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+func getFaultCause(err error) string {
+	err = errors.Cause(err)
+
+	faultErr, ok := err.(types.HasFault)
+	if !ok {
+		return ""
+	}
+
+	fault := faultErr.Fault()
+	if fault == nil {
+		return ""
+	}
+
+	methodFault := fault.GetMethodFault()
+	if methodFault == nil {
+		return ""
+	}
+
+	faultCause := methodFault.FaultCause
+	if faultCause == nil {
+		return ""
+	}
+
+	return faultCause.LocalizedMessage
 }
