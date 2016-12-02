@@ -142,6 +142,7 @@ func runServer(c *cli.Context) {
 	go travismetrics.ReportMemstatsMetrics()
 
 	raven.SetDSN(c.String("sentry-dsn"))
+	raven.SetRelease(VersionString)
 
 	server.Main(&server.Config{
 		Addr:      c.String("addr"),
