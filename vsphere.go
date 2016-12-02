@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/getsentry/raven-go"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/sony/gobreaker"
@@ -217,6 +218,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		err := task.Wait(backgroundCtx)
 		if err != nil {
 			go i.terminateIfExists(backgroundCtx, name.String())
+			raven.CaptureError(err, map[string]string{"vm-name": name.String(), "task": "clone"})
 			errChan <- errors.Wrap(err, "vm clone task failed")
 			return
 		}
@@ -262,6 +264,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		err = task.Wait(backgroundCtx)
 		if err != nil {
 			go i.terminateIfExists(backgroundCtx, name.String())
+			raven.CaptureError(err, map[string]string{"vm-name": name.String(), "task": "power-on"})
 			errChan <- errors.Wrap(err, "vm power on task failed")
 			return
 		}
