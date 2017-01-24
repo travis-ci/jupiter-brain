@@ -5,16 +5,25 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/pkg/errors"
 	"github.com/travis-ci/jupiter-brain/metrics"
 )
 
-var (
-	requestHoneycombEventBuilder = libhoney.NewBuilder()
-)
+func honeySendEvent(data map[string]interface{}) error {
+	ev := libhoney.NewEvent()
+	ev.Dataset = "jupiter-brain-requests"
 
-func init() {
-	requestHoneycombEventBuilder.Dataset = "jupiter-brain-requests"
+	if err := ev.Add(data); err != nil {
+		return errors.Wrap(err, "adding data to event failed")
+	}
+
+	if err := ev.Send(); err != nil {
+		return errors.Wrap(err, "sending event failed")
+	}
+
+	return nil
 }
 
 type metricsResponseWriter struct {
@@ -27,23 +36,29 @@ type metricsResponseWriter struct {
 func (mrw *metricsResponseWriter) WriteHeader(code int) {
 	metrics.Mark(fmt.Sprintf("travis.jupiter-brain.response-code.%d", code))
 
-	requestHoneycombEventBuilder.SendNow(map[string]interface{}{
+	err := honeySendEvent(map[string]interface{}{
 		"event":         "finished",
 		"duration_ms":   float64(mrw.start.Sub(time.Now()).Nanoseconds()) / 1000000.0,
 		"method":        mrw.req.Method,
 		"endpoint":      mrw.req.URL.Path,
 		"response_code": code,
 	})
+	if err != nil {
+		logrus.WithField("err", err).Info("error sending event=finished to honeycomb")
+	}
 
 	mrw.ResponseWriter.WriteHeader(code)
 }
 
 func ResponseMetricsHandler(rw http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
-	requestHoneycombEventBuilder.SendNow(map[string]interface{}{
+	err := honeySendEvent(map[string]interface{}{
 		"event":    "started",
 		"method":   req.Method,
 		"endpoint": req.URL.Path,
 	})
+	if err != nil {
+		logrus.WithField("err", err).Info("error sending event=started to honeycomb")
+	}
 
 	next(&metricsResponseWriter{
 		ResponseWriter: rw,
