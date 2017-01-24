@@ -38,7 +38,7 @@ func (mrw *metricsResponseWriter) WriteHeader(code int) {
 
 	err := honeySendEvent(map[string]interface{}{
 		"event":         "finished",
-		"duration_ms":   float64(mrw.start.Sub(time.Now()).Nanoseconds()) / 1000000.0,
+		"duration_ms":   float64(time.Now().Sub(mrw.start).Nanoseconds()) / 1000000.0,
 		"method":        mrw.req.Method,
 		"endpoint":      mrw.req.URL.Path,
 		"response_code": code,
