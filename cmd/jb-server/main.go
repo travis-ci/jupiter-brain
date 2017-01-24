@@ -2,11 +2,13 @@ package main
 
 import (
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	raven "github.com/getsentry/raven-go"
+	libhoney "github.com/honeycombio/libhoney-go"
 	librato "github.com/mihasya/go-metrics-librato"
 	metrics "github.com/rcrowley/go-metrics"
 	travismetrics "github.com/travis-ci/jupiter-brain/metrics"
@@ -117,6 +119,11 @@ func main() {
 			EnvVar: "JUPITER_BRAIN_REQUEST_TIMEOUT",
 			Value:  3 * time.Minute,
 		},
+		cli.StringFlag{
+			Name:   "honeycomb-write-key",
+			Usage:  "The write key for Honeycomb",
+			EnvVar: "JUPITER_BRAIN_HONEYCOMB_WRITE_KEY",
+		},
 	}
 	app.Action = runServer
 
@@ -140,6 +147,17 @@ func runServer(c *cli.Context) {
 		)
 	}
 	go travismetrics.ReportMemstatsMetrics()
+
+	if c.String("honeycomb-write-key") != "" {
+		libhoney.Init(libhoney.Config{
+			WriteKey: c.String("honeycomb-write-key"),
+		})
+		defer libhoney.Close()
+
+		libhoney.AddDynamicField("num_goroutines", func() interface{} { return runtime.NumGoroutine() })
+		libhoney.AddField("jupiter_brain_version", c.App.Version)
+		libhoney.AddField("jupiter_brain_source", c.String("librato-source"))
+	}
 
 	raven.SetDSN(c.String("sentry-dsn"))
 	raven.SetRelease(VersionString)

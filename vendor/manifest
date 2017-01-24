@@ -48,6 +48,30 @@
 			"notests": true
 		},
 		{
+			"importpath": "github.com/facebookgo/clock",
+			"repository": "https://github.com/facebookgo/clock",
+			"vcs": "git",
+			"revision": "600d898af40aa09a7a93ecb9265d87b0504b6f03",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/facebookgo/limitgroup",
+			"repository": "https://github.com/facebookgo/limitgroup",
+			"vcs": "git",
+			"revision": "6abd8d71ec01451d7f1929eacaa263bbe2935d05",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/facebookgo/muster",
+			"repository": "https://github.com/facebookgo/muster",
+			"vcs": "git",
+			"revision": "fd3d7953fd52354a74b9f6b3d70d0c9650c4ec2a",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/getsentry/raven-go",
 			"repository": "https://github.com/getsentry/raven-go",
 			"vcs": "git",
@@ -68,6 +92,14 @@
 			"vcs": "",
 			"revision": "8096f47503459bcc74d1f4c487b7e6e42e5746b5",
 			"branch": "HEAD"
+		},
+		{
+			"importpath": "github.com/honeycombio/libhoney-go",
+			"repository": "https://github.com/honeycombio/libhoney-go",
+			"vcs": "git",
+			"revision": "7a3b7395daf1d2d1ccfcac3e6f7d8f22406509ba",
+			"branch": "master",
+			"notests": true
 		},
 		{
 			"importpath": "github.com/jmoiron/sqlx",
@@ -141,6 +173,14 @@
 			"repository": "https://github.com/vmware/govmomi",
 			"vcs": "git",
 			"revision": "2cbad5127c61e13d72165f954543a7265625bebb",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "gopkg.in/alexcesaro/statsd.v2",
+			"repository": "https://gopkg.in/alexcesaro/statsd.v2",
+			"vcs": "git",
+			"revision": "7fea3f0d2fab1ad973e641e51dba45443a311a90",
 			"branch": "master",
 			"notests": true
 		}
