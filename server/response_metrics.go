@@ -41,6 +41,7 @@ func (mrw *metricsResponseWriter) WriteHeader(code int) {
 		"duration_ms":   float64(time.Now().Sub(mrw.start).Nanoseconds()) / 1000000.0,
 		"method":        mrw.req.Method,
 		"endpoint":      mrw.req.URL.Path,
+		"request_id":    mrw.req.Header.Get("X-Request-ID"),
 		"response_code": code,
 	})
 	if err != nil {
@@ -52,9 +53,10 @@ func (mrw *metricsResponseWriter) WriteHeader(code int) {
 
 func ResponseMetricsHandler(rw http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
 	err := honeySendEvent(map[string]interface{}{
-		"event":    "started",
-		"method":   req.Method,
-		"endpoint": req.URL.Path,
+		"event":      "started",
+		"method":     req.Method,
+		"endpoint":   req.URL.Path,
+		"request_id": req.Header.Get("X-Request-ID"),
 	})
 	if err != nil {
 		logrus.WithField("err", err).Info("error sending event=started to honeycomb")
