@@ -22,6 +22,7 @@ import (
 	"github.com/meatballhat/negroni-logrus"
 	"github.com/pkg/errors"
 	"github.com/travis-ci/jupiter-brain"
+	"github.com/travis-ci/jupiter-brain/jbcontext"
 	"github.com/travis-ci/jupiter-brain/metrics"
 	"github.com/travis-ci/jupiter-brain/server/jsonapi"
 	"github.com/travis-ci/jupiter-brain/server/negroniraven"
@@ -136,6 +137,14 @@ func (srv *server) setupRoutes() {
 func (srv *server) setupMiddleware() {
 	srv.n.Use(negroni.NewRecovery())
 	srv.n.Use(negronilogrus.NewCustomMiddleware(srv.log.Level, srv.log.Formatter, "web"))
+	srv.n.UseFunc(func(rw http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+		if req.Header.Get("X-Request-ID") != "" {
+			ctx := context.WithValue(req.Context(), jbcontext.RequestIDKey, req.Header.Get("X-Request-ID"))
+			next(rw, req.WithContext(ctx))
+		} else {
+			next(rw, req)
+		}
+	})
 	srv.n.UseFunc(ResponseMetricsHandler)
 	srv.n.Use(negroni.HandlerFunc(srv.authMiddleware))
 	nr, err := negroniraven.NewMiddleware(srv.sentryDSN)
