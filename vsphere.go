@@ -174,6 +174,15 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		return nil, errors.Wrap(err, "failed to find base VM and snapshot")
 	}
 
+	imageHostName := ""
+	if host, _ := vm.HostSystem(ctx); host != nil {
+		var mh mo.HostSystem
+		err := host.Properties(ctx, host.Reference(), []string{"name"}, &mh)
+		if err == nil {
+			imageHostName = mh.Name
+		}
+	}
+
 	resourcePool, err := i.resourcePool(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to find resource pool")
@@ -206,6 +215,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 			"duration_ms":     float64(time.Now().Sub(cloneStartTime).Nanoseconds()) / 1000000.0,
 			"vm_name":         name,
 			"image_name":      baseName,
+			"image_host_name": imageHostName,
 			"request_id":      ctx.Value(jbcontext.RequestIDKey),
 			"success":         false,
 		})
@@ -232,6 +242,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 			"duration_ms":     float64(time.Now().Sub(cloneStartTime).Nanoseconds()) / 1000000.0,
 			"vm_name":         name,
 			"image_name":      baseName,
+			"image_host_name": imageHostName,
 			"request_id":      ctx.Value(jbcontext.RequestIDKey),
 			"success":         err == nil,
 		})
@@ -277,6 +288,15 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 		newVM := object.NewVirtualMachine(client.Client, vmManagedRef)
 
+		vmHostName := ""
+		if host, _ := newVM.HostSystem(ctx); host != nil {
+			var mh mo.HostSystem
+			err := host.Properties(ctx, host.Reference(), []string{"name"}, &mh)
+			if err == nil {
+				vmHostName = mh.Name
+			}
+		}
+
 		if ctx.Err() != nil {
 			// The HTTP context is cancelled, so let's delete the VM we just cloned instead of powering it on
 			errChan <- errors.Wrap(i.Terminate(backgroundCtx, name.String()), "error while trying to delete abandoned VM")
@@ -313,18 +333,22 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		metrics.TimeSince("travis.jupiter-brain.tasks.full-start", startTime)
 
 		libhoney.SendNow(map[string]interface{}{
-			"event":       "power_on:finished",
-			"duration_ms": float64(time.Now().Sub(powerOnStartTime).Nanoseconds()) / 1000000.0,
-			"vm_name":     name,
-			"image_name":  baseName,
-			"request_id":  ctx.Value(jbcontext.RequestIDKey),
+			"event":           "power_on:finished",
+			"duration_ms":     float64(time.Now().Sub(powerOnStartTime).Nanoseconds()) / 1000000.0,
+			"vm_name":         name,
+			"vm_host_name":    vmHostName,
+			"image_name":      baseName,
+			"image_host_name": imageHostName,
+			"request_id":      ctx.Value(jbcontext.RequestIDKey),
 		})
 		libhoney.SendNow(map[string]interface{}{
-			"event":       "create:finished",
-			"duration_ms": float64(time.Now().Sub(startTime).Nanoseconds()) / 1000000.0,
-			"vm_name":     name,
-			"image_name":  baseName,
-			"request_id":  ctx.Value(jbcontext.RequestIDKey),
+			"event":           "create:finished",
+			"duration_ms":     float64(time.Now().Sub(startTime).Nanoseconds()) / 1000000.0,
+			"vm_name":         name,
+			"vm_host_name":    vmHostName,
+			"image_name":      baseName,
+			"image_host_name": imageHostName,
+			"request_id":      ctx.Value(jbcontext.RequestIDKey),
 		})
 
 		if ctx.Err() != nil {
