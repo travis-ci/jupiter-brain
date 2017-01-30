@@ -237,16 +237,17 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		defer cancel()
 
 		err := task.Wait(backgroundCtx)
-		libhoney.SendNow(map[string]interface{}{
-			"event":           "clone:finished",
-			"duration_ms":     float64(time.Now().Sub(cloneStartTime).Nanoseconds()) / 1000000.0,
-			"vm_name":         name,
-			"image_name":      baseName,
-			"image_host_name": imageHostName,
-			"request_id":      ctx.Value(jbcontext.RequestIDKey),
-			"success":         err == nil,
-		})
 		if err != nil {
+			libhoney.SendNow(map[string]interface{}{
+				"event":           "clone:finished",
+				"duration_ms":     float64(time.Now().Sub(cloneStartTime).Nanoseconds()) / 1000000.0,
+				"vm_name":         name,
+				"image_name":      baseName,
+				"image_host_name": imageHostName,
+				"request_id":      ctx.Value(jbcontext.RequestIDKey),
+				"success":         false,
+			})
+
 			go i.terminateIfExists(backgroundCtx, name.String())
 			if err != context.Canceled && err != context.DeadlineExceeded {
 				var interfaces []raven.Interface
@@ -296,6 +297,17 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 				vmHostName = mh.Name
 			}
 		}
+
+		libhoney.SendNow(map[string]interface{}{
+			"event":           "clone:finished",
+			"duration_ms":     float64(time.Now().Sub(cloneStartTime).Nanoseconds()) / 1000000.0,
+			"vm_name":         name,
+			"vm_host_name":    vmHostName,
+			"image_name":      baseName,
+			"image_host_name": imageHostName,
+			"request_id":      ctx.Value(jbcontext.RequestIDKey),
+			"success":         true,
+		})
 
 		if ctx.Err() != nil {
 			// The HTTP context is cancelled, so let's delete the VM we just cloned instead of powering it on
