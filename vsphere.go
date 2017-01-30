@@ -201,6 +201,14 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 	cloneStartTime := time.Now()
 	task, err := vm.Clone(ctx, vmFolder, name.String(), cloneSpec)
 	if err != nil {
+		libhoney.SendNow(map[string]interface{}{
+			"event":           "clone:finished",
+			"duration_ms":     float64(time.Now().Sub(cloneStartTime).Nanoseconds()) / 1000000.0,
+			"vm_name":         name,
+			"image_name":      baseName,
+			"request_id":      ctx.Value(jbcontext.RequestIDKey),
+			"success":         false,
+		})
 		go i.terminateIfExists(ctx, name.String())
 		return nil, errors.Wrap(err, "failed to create vm clone task")
 	}
@@ -219,6 +227,14 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		defer cancel()
 
 		err := task.Wait(backgroundCtx)
+		libhoney.SendNow(map[string]interface{}{
+			"event":           "clone:finished",
+			"duration_ms":     float64(time.Now().Sub(cloneStartTime).Nanoseconds()) / 1000000.0,
+			"vm_name":         name,
+			"image_name":      baseName,
+			"request_id":      ctx.Value(jbcontext.RequestIDKey),
+			"success":         err == nil,
+		})
 		if err != nil {
 			go i.terminateIfExists(backgroundCtx, name.String())
 			if err != context.Canceled && err != context.DeadlineExceeded {
@@ -237,14 +253,6 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 			return
 		}
 		metrics.TimeSince("travis.jupiter-brain.tasks.clone", cloneStartTime)
-
-		libhoney.SendNow(map[string]interface{}{
-			"event":       "clone:finished",
-			"duration_ms": float64(time.Now().Sub(cloneStartTime).Nanoseconds()) / 1000000.0,
-			"vm_name":     name,
-			"image_name":  baseName,
-			"request_id":  ctx.Value(jbcontext.RequestIDKey),
-		})
 
 		var mt mo.Task
 		err = task.Properties(backgroundCtx, task.Reference(), []string{"info"}, &mt)
