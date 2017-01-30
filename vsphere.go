@@ -10,9 +10,11 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/getsentry/raven-go"
+	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/sony/gobreaker"
+	"github.com/travis-ci/jupiter-brain/jbcontext"
 	"github.com/travis-ci/jupiter-brain/metrics"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/object"
@@ -236,6 +238,14 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		}
 		metrics.TimeSince("travis.jupiter-brain.tasks.clone", cloneStartTime)
 
+		libhoney.SendNow(map[string]interface{}{
+			"event":       "clone:finished",
+			"duration_ms": float64(time.Now().Sub(cloneStartTime).Nanoseconds()) / 1000000.0,
+			"vm_name":     name,
+			"image_name":  baseName,
+			"request_id":  ctx.Value(jbcontext.RequestIDKey),
+		})
+
 		var mt mo.Task
 		err = task.Properties(backgroundCtx, task.Reference(), []string{"info"}, &mt)
 		if err != nil {
@@ -293,6 +303,21 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		}
 		metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
 		metrics.TimeSince("travis.jupiter-brain.tasks.full-start", startTime)
+
+		libhoney.SendNow(map[string]interface{}{
+			"event":       "power_on:finished",
+			"duration_ms": float64(time.Now().Sub(powerOnStartTime).Nanoseconds()) / 1000000.0,
+			"vm_name":     name,
+			"image_name":  baseName,
+			"request_id":  ctx.Value(jbcontext.RequestIDKey),
+		})
+		libhoney.SendNow(map[string]interface{}{
+			"event":       "create:finished",
+			"duration_ms": float64(time.Now().Sub(startTime).Nanoseconds()) / 1000000.0,
+			"vm_name":     name,
+			"image_name":  baseName,
+			"request_id":  ctx.Value(jbcontext.RequestIDKey),
+		})
 
 		if ctx.Err() != nil {
 			// The HTTP context is cancelled, so let's delete the VM we just cloned instead of returning it
