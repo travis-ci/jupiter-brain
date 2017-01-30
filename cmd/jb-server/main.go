@@ -124,6 +124,11 @@ func main() {
 			Usage:  "The write key for Honeycomb",
 			EnvVar: "JUPITER_BRAIN_HONEYCOMB_WRITE_KEY",
 		},
+		cli.StringFlag{
+			Name:   "honeycomb-dataset",
+			Usage:  "The dataset name for Honeycomb",
+			EnvVar: "JUPITER_BRAIN_HONEYCOMB_DATASET",
+		},
 	}
 	app.Action = runServer
 
@@ -148,9 +153,10 @@ func runServer(c *cli.Context) {
 	}
 	go travismetrics.ReportMemstatsMetrics()
 
-	if c.String("honeycomb-write-key") != "" {
+	if c.String("honeycomb-write-key") != "" && c.String("honeycomb-dataset") != "" {
 		libhoney.Init(libhoney.Config{
 			WriteKey: c.String("honeycomb-write-key"),
+			Dataset:  c.String("honeycomb-dataset"),
 		})
 		defer libhoney.Close()
 

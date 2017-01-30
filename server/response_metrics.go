@@ -7,24 +7,8 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	libhoney "github.com/honeycombio/libhoney-go"
-	"github.com/pkg/errors"
 	"github.com/travis-ci/jupiter-brain/metrics"
 )
-
-func honeySendEvent(data map[string]interface{}) error {
-	ev := libhoney.NewEvent()
-	ev.Dataset = "jupiter-brain-requests"
-
-	if err := ev.Add(data); err != nil {
-		return errors.Wrap(err, "adding data to event failed")
-	}
-
-	if err := ev.Send(); err != nil {
-		return errors.Wrap(err, "sending event failed")
-	}
-
-	return nil
-}
 
 type metricsResponseWriter struct {
 	http.ResponseWriter
@@ -36,7 +20,7 @@ type metricsResponseWriter struct {
 func (mrw *metricsResponseWriter) WriteHeader(code int) {
 	metrics.Mark(fmt.Sprintf("travis.jupiter-brain.response-code.%d", code))
 
-	err := honeySendEvent(map[string]interface{}{
+	err := libhoney.SendNow(map[string]interface{}{
 		"event":         "finished",
 		"duration_ms":   float64(time.Now().Sub(mrw.start).Nanoseconds()) / 1000000.0,
 		"method":        mrw.req.Method,
@@ -52,7 +36,7 @@ func (mrw *metricsResponseWriter) WriteHeader(code int) {
 }
 
 func ResponseMetricsHandler(rw http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
-	err := honeySendEvent(map[string]interface{}{
+	err := libhoney.SendNow(map[string]interface{}{
 		"event":      "started",
 		"method":     req.Method,
 		"endpoint":   req.URL.Path,
