@@ -371,6 +371,7 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 		return errors.New("not a VM")
 	}
 
+	powerOffStartTime := time.Now()
 	task, err := vm.PowerOff(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to create vm power off task")
@@ -392,6 +393,14 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 		// if the VM is still powered on.
 		_ = task.Wait(ctx)
 
+		libhoney.SendNow(map[string]interface{}{
+			"event":       "power_off:finished",
+			"duration_ms": float64(time.Now().Sub(powerOffStartTime).Nanoseconds()) / 1000000.0,
+			"vm_name":     id,
+			"request_id":  ctx.Value(jbcontext.RequestIDKey),
+		})
+
+		destroyStartTime := time.Now()
 		task, err = vm.Destroy(ctx)
 		if err != nil {
 			errChan <- errors.Wrap(err, "failed to create vm destroy task")
@@ -400,6 +409,19 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 
 		err = task.Wait(ctx)
 		errChan <- errors.Wrap(err, "vm destroy task failed")
+
+		libhoney.SendNow(map[string]interface{}{
+			"event":       "destroy:finished",
+			"duration_ms": float64(time.Now().Sub(destroyStartTime).Nanoseconds()) / 1000000.0,
+			"vm_name":     id,
+			"request_id":  ctx.Value(jbcontext.RequestIDKey),
+		})
+		libhoney.SendNow(map[string]interface{}{
+			"event":       "terminate:finished",
+			"duration_ms": float64(time.Now().Sub(powerOffStartTime).Nanoseconds()) / 1000000.0,
+			"vm_name":     id,
+			"request_id":  ctx.Value(jbcontext.RequestIDKey),
+		})
 	}()
 
 	select {
