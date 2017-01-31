@@ -24,7 +24,7 @@ func (mrw *metricsResponseWriter) WriteHeader(code int) {
 }
 
 func (mrw *metricsResponseWriter) Write(p []byte) (int, error) {
-	n, err := mrw.Write(p)
+	n, err := mrw.ResponseWriter.Write(p)
 
 	mrw.bytesWritten += int64(n)
 
