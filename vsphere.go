@@ -162,8 +162,10 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		honeycombData["total_ms"] = float64(time.Since(startTime).Nanoseconds()) / 1000000.0
 		if err != nil {
 			honeycombData["err"] = err.Error()
+			honeycombData["success"] = 0
+		} else {
+			honeycombData["success"] = 1
 		}
-		honeycombData["success"] = (err == nil)
 		honeycombData["stage"] = stage
 		libhoney.SendNow(honeycombData)
 	}
