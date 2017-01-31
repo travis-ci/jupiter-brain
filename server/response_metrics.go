@@ -13,42 +13,42 @@ import (
 type metricsResponseWriter struct {
 	http.ResponseWriter
 
-	req   *http.Request
-	start time.Time
+	responseCode int
+	bytesWritten int64
 }
 
 func (mrw *metricsResponseWriter) WriteHeader(code int) {
 	metrics.Mark(fmt.Sprintf("travis.jupiter-brain.response-code.%d", code))
-
-	err := libhoney.SendNow(map[string]interface{}{
-		"event":         "finished",
-		"duration_ms":   float64(time.Now().Sub(mrw.start).Nanoseconds()) / 1000000.0,
-		"method":        mrw.req.Method,
-		"endpoint":      mrw.req.URL.Path,
-		"request_id":    mrw.req.Header.Get("X-Request-ID"),
-		"response_code": code,
-	})
-	if err != nil {
-		logrus.WithField("err", err).Info("error sending event=finished to honeycomb")
-	}
+	mrw.responseCode = code
 
 	mrw.ResponseWriter.WriteHeader(code)
 }
 
+func (mrw *metricsResponseWriter) Write(p []byte) (int, error) {
+	n, err := mrw.Write(p)
+
+	mrw.bytesWritten += int64(n)
+
+	return n, err
+}
+
 func ResponseMetricsHandler(rw http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
-	err := libhoney.SendNow(map[string]interface{}{
-		"event":      "started",
-		"method":     req.Method,
-		"endpoint":   req.URL.Path,
-		"request_id": req.Header.Get("X-Request-ID"),
-	})
-	if err != nil {
-		logrus.WithField("err", err).Info("error sending event=started to honeycomb")
+	mrw := &metricsResponseWriter{
+		ResponseWriter: rw,
+		statusCode:     http.StatusOK,
+		bytesWritten:   0,
 	}
 
-	next(&metricsResponseWriter{
-		ResponseWriter: rw,
-		req:            req,
-		start:          time.Now(),
-	}, req)
+	requestStart := time.Now()
+	next(mrw, req)
+
+	libhoney.SendNow(map[string]interface{}{
+		"event":          "http-request",
+		"method":         req.Method,
+		"url_path":       req.URL.Path,
+		"request_id":     req.Header.Get("X-Request-ID"),
+		"response_code":  mrw.statusCode,
+		"total_ms":       float64(time.Since(requestStart).Nanoseconds()) / 1000000.0,
+		"response_bytes": mrw.bytesWritten,
+	})
 }
