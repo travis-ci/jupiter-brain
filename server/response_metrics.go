@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/travis-ci/jupiter-brain/metrics"
 )
@@ -35,7 +34,7 @@ func (mrw *metricsResponseWriter) Write(p []byte) (int, error) {
 func ResponseMetricsHandler(rw http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
 	mrw := &metricsResponseWriter{
 		ResponseWriter: rw,
-		statusCode:     http.StatusOK,
+		responseCode:   http.StatusOK,
 		bytesWritten:   0,
 	}
 
@@ -47,7 +46,7 @@ func ResponseMetricsHandler(rw http.ResponseWriter, req *http.Request, next http
 		"method":         req.Method,
 		"url_path":       req.URL.Path,
 		"request_id":     req.Header.Get("X-Request-ID"),
-		"response_code":  mrw.statusCode,
+		"response_code":  mrw.responseCode,
 		"total_ms":       float64(time.Since(requestStart).Nanoseconds()) / 1000000.0,
 		"response_bytes": mrw.bytesWritten,
 	})
