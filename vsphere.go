@@ -380,8 +380,28 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 }
 
 func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error {
+	startTime := time.Now()
+	honeycombData := map[string]interface{}{
+		"event":      "terminate",
+		"vm_name":    id,
+		"request_id": ctx.Value(jbcontext.RequestIDKey),
+	}
+
+	honeycombSend := func(stage string, err error) {
+		honeycombData["total_ms"] = float64(time.Since(startTime).Nanoseconds()) / 1000000.0
+		if err != nil {
+			honeycombData["err"] = err.Error()
+			honeycombData["success"] = 0
+		} else {
+			honeycombData["success"] = 1
+		}
+		honeycombData["stage"] = stage
+		libhoney.SendNow(honeycombData)
+	}
+
 	releaseSem, err := i.requestDeleteSemaphore(ctx)
 	if err != nil {
+		honeycombSend("waiting_for_semaphore", err)
 		return errors.Wrap(err, "timed out waiting for concurrency semaphore")
 	}
 	autoreleaseSem := true
@@ -390,9 +410,11 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 			releaseSem()
 		}
 	}()
+	honeycombData["semaphore_ms"] = float64(time.Since(startTime).Nanoseconds()) / 1000000.0
 
 	client, err := i.client(ctx)
 	if err != nil {
+		honeycombSend("get_client", err)
 		return err
 	}
 
@@ -400,21 +422,27 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 
 	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.VMPath+id)
 	if err != nil {
+		honeycombSend("find_vm", err)
 		return errors.Wrap(err, "failed to search for vm")
 	}
 
 	if vmRef == nil {
-		return VirtualMachineNotFoundError{Path: i.paths.VMPath, ID: id}
+		err = VirtualMachineNotFoundError{Path: i.paths.VMPath, ID: id}
+		honeycombSend("vm_404", err)
+		return err
 	}
 
 	vm, ok := vmRef.(*object.VirtualMachine)
 	if !ok {
-		return errors.New("not a VM")
+		err = errors.Errorf("not a VM, but a %T", vm)
+		honeycombSend("vm_incorrect_type", err)
+		return err
 	}
 
 	powerOffStartTime := time.Now()
 	task, err := vm.PowerOff(ctx)
 	if err != nil {
+		honeycombSend("vm_power_off_task", err)
 		return errors.Wrap(err, "failed to create vm power off task")
 	}
 
@@ -430,39 +458,34 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		// Ignore error since the VM may already be powered off. vm.Destroy will fail
-		// if the VM is still powered on.
-		_ = task.Wait(ctx)
+		err = task.Wait(ctx)
+		if err != nil {
+			// Ignore error since the VM may already be powered off. vm.Destroy will fail
+			// if the VM is still powered on.
 
-		libhoney.SendNow(map[string]interface{}{
-			"event":       "power_off:finished",
-			"duration_ms": float64(time.Now().Sub(powerOffStartTime).Nanoseconds()) / 1000000.0,
-			"vm_name":     id,
-			"request_id":  ctx.Value(jbcontext.RequestIDKey),
-		})
+			// Send the error to Honeycomb, though
+			honeycombData["power_off_err"] = err
+		}
+		honeycombData["power_off_ms"] = float64(time.Since(powerOffStartTime).Nanoseconds()) / 1000000.0
 
 		destroyStartTime := time.Now()
 		task, err = vm.Destroy(ctx)
 		if err != nil {
+			honeycombSend("destroy_vm_task", err)
 			errChan <- errors.Wrap(err, "failed to create vm destroy task")
 			return
 		}
 
 		err = task.Wait(ctx)
-		errChan <- errors.Wrap(err, "vm destroy task failed")
+		if err != nil {
+			honeycombSend("destroy_vm_task_wait", err)
+			errChan <- errors.Wrap(err, "vm destroy task failed")
+			return
+		}
+		honeycombData["destroy_ms"] = float64(time.Since(destroyStartTime).Nanoseconds()) / 1000000.0
 
-		libhoney.SendNow(map[string]interface{}{
-			"event":       "destroy:finished",
-			"duration_ms": float64(time.Now().Sub(destroyStartTime).Nanoseconds()) / 1000000.0,
-			"vm_name":     id,
-			"request_id":  ctx.Value(jbcontext.RequestIDKey),
-		})
-		libhoney.SendNow(map[string]interface{}{
-			"event":       "terminate:finished",
-			"duration_ms": float64(time.Now().Sub(powerOffStartTime).Nanoseconds()) / 1000000.0,
-			"vm_name":     id,
-			"request_id":  ctx.Value(jbcontext.RequestIDKey),
-		})
+		honeycombSend("finished", nil)
+		errChan <- nil
 	}()
 
 	select {
