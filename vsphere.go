@@ -158,21 +158,19 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		"request_id": ctx.Value(jbcontext.RequestIDKey),
 	}
 
-	honeycombSend := func(stage string) {
+	honeycombSend := func(stage string, err error) {
 		honeycombData["total_ms"] = float64(time.Since(startTime).Nanoseconds()) / 1000000.0
-		if stage == "" {
-			honeycombData["stage"] = "finished"
-			honeycombData["success"] = true
-		} else {
-			honeycombData["stage"] = stage
-			honeycombData["success"] = false
+		if err != nil {
+			honeycombData["err"] = err.Error()
 		}
+		honeycombData["success"] = (err == nil)
+		honeycombData["stage"] = stage
 		libhoney.SendNow(honeycombData)
 	}
 
 	releaseSem, err := i.requestCreateSemaphore(ctx)
 	if err != nil {
-		honeycombSend("waiting_for_semaphore")
+		honeycombSend("waiting_for_semaphore", err)
 		return nil, errors.Wrap(err, "timed out waiting for concurrency semaphore")
 	}
 	autoreleaseSem := true
@@ -185,13 +183,13 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	client, err := i.client(ctx)
 	if err != nil {
-		honeycombSend("get_client")
+		honeycombSend("get_client", err)
 		return nil, err
 	}
 
 	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, baseName)
 	if err != nil {
-		honeycombSend("find_base_vm_and_snapshot")
+		honeycombSend("find_base_vm_and_snapshot", err)
 		return nil, errors.Wrap(err, "failed to find base VM and snapshot")
 	}
 
@@ -205,7 +203,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	resourcePool, err := i.resourcePool(ctx)
 	if err != nil {
-		honeycombSend("find_resource_pool")
+		honeycombSend("find_resource_pool", err)
 		return nil, errors.Wrap(err, "failed to find resource pool")
 	}
 
@@ -226,7 +224,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 	vmFolder, err := i.vmFolder(ctx)
 	if err != nil {
-		honeycombSend("find_vm_folder")
+		honeycombSend("find_vm_folder", err)
 		return nil, err
 	}
 
@@ -235,7 +233,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 	cloneStartTime := time.Now()
 	task, err := vm.Clone(ctx, vmFolder, name.String(), cloneSpec)
 	if err != nil {
-		honeycombSend("clone_vm_task")
+		honeycombSend("clone_vm_task", err)
 		go i.terminateIfExists(ctx, name.String())
 		return nil, errors.Wrap(err, "failed to create vm clone task")
 	}
@@ -255,7 +253,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 		err := task.Wait(backgroundCtx)
 		if err != nil {
-			honeycombSend("clone_vm_task_wait")
+			honeycombSend("clone_vm_task_wait", err)
 			go i.terminateIfExists(backgroundCtx, name.String())
 			if err != context.Canceled && err != context.DeadlineExceeded {
 				var interfaces []raven.Interface
@@ -278,24 +276,26 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		var mt mo.Task
 		err = task.Properties(backgroundCtx, task.Reference(), []string{"info"}, &mt)
 		if err != nil {
-			honeycombSend("vm_clone_get_info")
+			honeycombSend("vm_clone_get_info", err)
 			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Wrap(err, "failed to get vm info properties")
 			return
 		}
 
 		if mt.Info.Result == nil {
-			honeycombSend("got_nil_vm")
+			err = errors.Errorf("expected VM, but got nil")
+			honeycombSend("got_nil_vm", err)
 			go i.terminateIfExists(backgroundCtx, name.String())
-			errChan <- errors.Errorf("expected VM, but got nil")
+			errChan <- err
 			return
 		}
 
 		vmManagedRef, ok := mt.Info.Result.(types.ManagedObjectReference)
 		if !ok {
-			honeycombSend("vm_not_a_mo_ref")
+			err = errors.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
+			honeycombSend("vm_not_a_mo_ref", err)
 			go i.terminateIfExists(backgroundCtx, name.String())
-			errChan <- errors.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
+			errChan <- err
 			return
 		}
 
@@ -310,7 +310,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		}
 
 		if ctx.Err() != nil {
-			honeycombSend("abandoning_after_clone")
+			honeycombSend("abandoning_after_clone", ctx.Err())
 			// The HTTP context is cancelled, so let's delete the VM we just cloned instead of powering it on
 			errChan <- errors.Wrap(i.Terminate(backgroundCtx, name.String()), "error while trying to delete abandoned VM")
 			return
@@ -319,7 +319,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		powerOnStartTime := time.Now()
 		task, err = newVM.PowerOn(backgroundCtx)
 		if err != nil {
-			honeycombSend("power_on_vm_task")
+			honeycombSend("power_on_vm_task", err)
 			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Wrap(err, "failed to create vm power on task")
 			return
@@ -327,7 +327,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 		err = task.Wait(backgroundCtx)
 		if err != nil {
-			honeycombSend("power_on_vm_task_wait")
+			honeycombSend("power_on_vm_task_wait", err)
 			go i.terminateIfExists(backgroundCtx, name.String())
 			if err != context.Canceled && err != context.DeadlineExceeded {
 				var interfaces []raven.Interface
@@ -357,13 +357,13 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		}
 
 		if ctx.Err() != nil {
-			honeycombSend("abandoning_after_power_on")
+			honeycombSend("abandoning_after_power_on", ctx.Err())
 			// The HTTP context is cancelled, so let's delete the VM we just cloned instead of returning it
 			errChan <- errors.Wrap(i.Terminate(backgroundCtx, name.String()), "error while trying to delete abandoned VM")
 			return
 		}
 
-		honeycombSend("")
+		honeycombSend("finished", nil)
 		vmChan <- newVM
 	}()
 
