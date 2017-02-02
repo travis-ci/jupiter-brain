@@ -303,9 +303,9 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 
 		newVM := object.NewVirtualMachine(client.Client, vmManagedRef)
 
-		if host, _ := newVM.HostSystem(ctx); host != nil {
+		if host, _ := newVM.HostSystem(backgroundCtx); host != nil {
 			var mh mo.HostSystem
-			err := host.Properties(ctx, host.Reference(), []string{"name"}, &mh)
+			err := host.Properties(backgroundCtx, host.Reference(), []string{"name"}, &mh)
 			if err == nil {
 				honeycombData["vm_clone_host_name"] = mh.Name
 			}
