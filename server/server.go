@@ -18,6 +18,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/braintree/manners"
 	"github.com/codegangsta/negroni"
+	raven "github.com/getsentry/raven-go"
 	"github.com/gorilla/mux"
 	"github.com/meatballhat/negroni-logrus"
 	"github.com/pkg/errors"
@@ -300,6 +301,9 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 
 	instance, err := srv.i.Start(req.Context(), requestBody["data"]["base-image"])
 	if err != nil {
+		ravenHTTP := raven.NewHttp(req)
+		ravenHTTP.Data = requestBody["data"]
+		raven.CaptureError(err, nil, ravenHTTP)
 		jsonapi.Error(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -389,6 +393,7 @@ func (srv *server) handleInstanceByIDTerminate(w http.ResponseWriter, req *http.
 			jsonapi.Error(w, err, http.StatusNotFound)
 			return
 		default:
+			raven.CaptureError(err, nil, raven.NewHttp(req))
 			srv.log.WithFields(logrus.Fields{
 				"err": err,
 				"id":  vars["id"],
