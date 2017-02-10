@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -303,7 +304,12 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 	if err != nil {
 		ravenHTTP := raven.NewHttp(req)
 		ravenHTTP.Data = requestBody["data"]
-		raven.CaptureError(err, nil, ravenHTTP)
+		stacktrace := ravenStacktraceFromErr(err)
+		if stacktrace != nil {
+			raven.CaptureError(err, nil, ravenHTTP, stacktrace)
+		} else {
+			raven.CaptureError(err, nil, ravenHTTP)
+		}
 		jsonapi.Error(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -358,6 +364,12 @@ func (srv *server) handleInstanceByIDFetch(w http.ResponseWriter, req *http.Requ
 			jsonapi.Error(w, err, http.StatusNotFound)
 			return
 		default:
+			stacktrace := ravenStacktraceFromErr(err)
+			if stacktrace != nil {
+				raven.CaptureError(err, nil, raven.NewHttp(req), stacktrace)
+			} else {
+				raven.CaptureError(err, nil, raven.NewHttp(req))
+			}
 			srv.log.WithFields(logrus.Fields{
 				"err": err,
 				"id":  vars["id"],
@@ -393,7 +405,12 @@ func (srv *server) handleInstanceByIDTerminate(w http.ResponseWriter, req *http.
 			jsonapi.Error(w, err, http.StatusNotFound)
 			return
 		default:
-			raven.CaptureError(err, nil, raven.NewHttp(req))
+			stacktrace := ravenStacktraceFromErr(err)
+			if stacktrace != nil {
+				raven.CaptureError(err, nil, raven.NewHttp(req), stacktrace)
+			} else {
+				raven.CaptureError(err, nil, raven.NewHttp(req))
+			}
 			srv.log.WithFields(logrus.Fields{
 				"err": err,
 				"id":  vars["id"],
@@ -464,4 +481,33 @@ func (srv *server) signalHandler() {
 			time.Sleep(time.Second)
 		}
 	}
+}
+
+func ravenStacktraceFromErr(err error) *raven.Stacktrace {
+	type stackTracer interface {
+		StackTrace() errors.StackTrace
+	}
+	if serr, ok := err.(stackTracer); ok {
+		frames := serr.StackTrace()
+		stacktrace := &raven.Stacktrace{
+			Frames: make([]*raven.StacktraceFrame, len(frames)),
+		}
+		for _, frame := range frames {
+			linenumber, _ := strconv.Atoi(fmt.Sprintf("%d", frame))
+			newframe := raven.NewStacktraceFrame(
+				uintptr(frame)-1,
+				fmt.Sprintf("%s", frame),
+				linenumber,
+				3,
+				[]string{
+					"github.com/travis-ci/jupiter-brain",
+				},
+			)
+			stacktrace.Frames = append(stacktrace.Frames, newframe)
+		}
+
+		return stacktrace
+	}
+
+	return nil
 }
