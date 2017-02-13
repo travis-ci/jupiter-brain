@@ -30,6 +30,8 @@ import (
 	"github.com/travis-ci/jupiter-brain/server/negroniraven"
 )
 
+const ravenStacktraceContextLines = 3
+
 type server struct {
 	addr, authToken, sentryDSN string
 
@@ -498,7 +500,7 @@ func ravenStacktraceFromErr(err error) *raven.Stacktrace {
 				uintptr(frame)-1,
 				fmt.Sprintf("%s", frame),
 				linenumber,
-				3,
+				ravenStacktraceContextLines,
 				[]string{
 					"github.com/travis-ci/jupiter-brain",
 				},
