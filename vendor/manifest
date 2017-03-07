@@ -9,14 +9,6 @@
 			"branch": "HEAD"
 		},
 		{
-			"importpath": "github.com/braintree/manners",
-			"repository": "https://github.com/braintree/manners",
-			"vcs": "git",
-			"revision": "82a8879fc5fd0381fa8b2d8033b19bf255252088",
-			"branch": "master",
-			"notests": true
-		},
-		{
 			"importpath": "github.com/certifi/gocertifi",
 			"repository": "https://github.com/certifi/gocertifi",
 			"vcs": "git",
