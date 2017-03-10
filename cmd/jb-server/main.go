@@ -94,6 +94,11 @@ func main() {
 			EnvVar: "JUPITER_BRAIN_SENTRY_DSN,SENTRY_DSN",
 		},
 		cli.StringFlag{
+			Name:   "sentry-environment",
+			Usage:  "Environment name to pass to Sentry",
+			EnvVar: "JUPITER_BRAIN_SENTRY_ENVIRONMENT,SENTRY_ENVIRONMENT",
+		},
+		cli.StringFlag{
 			Name:   "librato-email",
 			Usage:  "Email for Librato account to send metrics to",
 			EnvVar: "JUPITER_BRAIN_LIBRATO_EMAIL,LIBRATO_EMAIL",
@@ -167,12 +172,16 @@ func runServer(c *cli.Context) {
 
 	raven.SetDSN(c.String("sentry-dsn"))
 	raven.SetRelease(VersionString)
+	if c.String("sentry-environment") != "" {
+		raven.SetEnvironment(c.String("sentry-environment"))
+	}
 
 	server.Main(&server.Config{
-		Addr:      c.String("addr"),
-		AuthToken: c.String("auth-token"),
-		Debug:     c.Bool("debug"),
-		SentryDSN: c.String("sentry-dsn"),
+		Addr:              c.String("addr"),
+		AuthToken:         c.String("auth-token"),
+		Debug:             c.Bool("debug"),
+		SentryDSN:         c.String("sentry-dsn"),
+		SentryEnvironment: c.String("sentry-environment"),
 
 		VSphereURL:                        c.String("vsphere-api-url"),
 		VSphereBasePath:                   c.String("vsphere-base-path"),
