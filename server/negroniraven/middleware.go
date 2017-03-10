@@ -14,10 +14,14 @@ type Middleware struct {
 	log *logrus.Logger
 }
 
-func NewMiddleware(sentryDSN string) (*Middleware, error) {
+func NewMiddleware(sentryDSN, environment string) (*Middleware, error) {
 	cl, err := raven.NewClient(sentryDSN, SentryTags)
 	if err != nil {
 		return nil, err
+	}
+
+	if environment != "" {
+		cl.SetEnvironment(environment)
 	}
 
 	log := logrus.New()
