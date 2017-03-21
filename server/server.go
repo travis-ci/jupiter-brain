@@ -506,7 +506,9 @@ func ravenStacktraceFromErr(err error) *raven.Stacktrace {
 					"github.com/travis-ci/jupiter-brain",
 				},
 			)
-			stacktrace.Frames = append(stacktrace.Frames, newframe)
+			if newframe != nil {
+				stacktrace.Frames = append(stacktrace.Frames, newframe)
+			}
 		}
 
 		return stacktrace
