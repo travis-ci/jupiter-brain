@@ -34,6 +34,10 @@ type Config struct {
 	// send errors.
 	SentryDSN string
 
+	// SentryEnvironment is the environment string to use when sending errors
+	// to Sentry. Has no effect if SentryDSN is empty.
+	SentryEnvironment string
+
 	// DatabaseURL is the PostgreSQL database URL wow!
 	DatabaseURL string
 

@@ -33,7 +33,7 @@ import (
 const ravenStacktraceContextLines = 3
 
 type server struct {
-	addr, authToken, sentryDSN string
+	addr, authToken, sentryDSN, sentryEnvironment string
 
 	log *logrus.Logger
 
@@ -81,9 +81,10 @@ func newServer(cfg *Config) (*server, error) {
 	}
 
 	srv := &server{
-		addr:      cfg.Addr,
-		authToken: cfg.AuthToken,
-		sentryDSN: cfg.SentryDSN,
+		addr:              cfg.Addr,
+		authToken:         cfg.AuthToken,
+		sentryDSN:         cfg.SentryDSN,
+		sentryEnvironment: cfg.SentryEnvironment,
 
 		log: log,
 
@@ -153,7 +154,7 @@ func (srv *server) setupMiddleware() {
 	})
 	srv.n.UseFunc(ResponseMetricsHandler)
 	srv.n.Use(negroni.HandlerFunc(srv.authMiddleware))
-	nr, err := negroniraven.NewMiddleware(srv.sentryDSN)
+	nr, err := negroniraven.NewMiddleware(srv.sentryDSN, srv.sentryEnvironment)
 	if err != nil {
 		panic(err)
 	}
@@ -509,7 +510,9 @@ func ravenStacktraceFromErr(err error) *raven.Stacktrace {
 					"github.com/travis-ci/jupiter-brain",
 				},
 			)
-			stacktrace.Frames = append(stacktrace.Frames, newframe)
+			if newframe != nil {
+				stacktrace.Frames = append(stacktrace.Frames, newframe)
+			}
 		}
 
 		return stacktrace
