@@ -10,8 +10,6 @@ import (
 	"github.com/travis-ci/jupiter-brain"
 )
 
-const maxOpenDatabaseConnections = 20
-
 type database interface {
 	SaveInstance(*jupiterbrain.Instance) error
 	DestroyInstance(string) error
@@ -26,7 +24,7 @@ type pgDatabase struct {
 	conn *sqlx.DB
 }
 
-func newPGDatabase(url string) (*pgDatabase, error) {
+func newPGDatabase(url string, maxOpenDatabaseConnections int) (*pgDatabase, error) {
 	conn, err := sqlx.Open("postgres", url)
 	if err != nil {
 		return nil, err

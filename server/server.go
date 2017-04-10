@@ -67,7 +67,7 @@ func newServer(cfg *Config) (*server, error) {
 		return nil, errors.Errorf("vSphere API URL must be absolute")
 	}
 
-	db, err := newPGDatabase(cfg.DatabaseURL)
+	db, err := newPGDatabase(cfg.DatabaseURL, cfg.DatabasePoolSize)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create postgres database")
 	}
