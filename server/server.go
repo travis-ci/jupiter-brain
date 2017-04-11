@@ -13,11 +13,11 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/braintree/manners"
 	"github.com/codegangsta/negroni"
 	raven "github.com/getsentry/raven-go"
 	"github.com/gorilla/mux"
@@ -41,7 +41,9 @@ type server struct {
 
 	n *negroni.Negroni
 	r *mux.Router
-	s *manners.GracefulServer
+	s *http.Server
+
+	backgroundJobs sync.WaitGroup
 
 	db       database
 	bootTime time.Time
@@ -97,10 +99,10 @@ func newServer(cfg *Config) (*server, error) {
 
 		n: negroni.New(),
 		r: mux.NewRouter(),
-		s: manners.NewWithServer(&http.Server{
+		s: &http.Server{
 			ReadTimeout:  10 * time.Second,
 			WriteTimeout: cfg.RequestTimeout + 10*time.Second,
-		}),
+		},
 
 		db:       db,
 		bootTime: time.Now().UTC(),
@@ -126,7 +128,7 @@ func (srv *server) Run() {
 	srv.s.Addr = srv.addr
 	srv.s.Handler = http.TimeoutHandler(srv.n, srv.requestTimeout, "request timed out")
 	err := srv.s.ListenAndServe()
-	if err != nil {
+	if err != nil && err != http.ErrServerClosed {
 		srv.log.WithField("err", err).Error("ListenAndServe failed")
 	}
 }
@@ -320,9 +322,9 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 	recoverDelete := false
 	defer func() {
 		if (recoverDelete || req.Context().Err() != nil) && instance != nil {
+			srv.backgroundJobs.Add(1)
 			go func() {
-				srv.s.StartRoutine()
-				defer srv.s.FinishRoutine()
+				defer srv.backgroundJobs.Done()
 				srv.i.Terminate(context.TODO(), instance.ID)
 			}()
 		}
@@ -466,10 +468,12 @@ func (srv *server) signalHandler() {
 			switch sig {
 			case syscall.SIGTERM:
 				srv.log.Info("Received SIGTERM, shutting down now.")
-				srv.s.Close()
+				srv.backgroundJobs.Wait()
+				srv.s.Shutdown(context.Background())
 			case syscall.SIGINT:
 				srv.log.Info("Received SIGINT, shutting down now.")
-				srv.s.Close()
+				srv.backgroundJobs.Wait()
+				srv.s.Shutdown(context.Background())
 			case syscall.SIGUSR1:
 				srv.log.WithFields(logrus.Fields{
 					"version":   os.Getenv("VERSION"),
