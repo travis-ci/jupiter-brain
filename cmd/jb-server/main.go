@@ -83,6 +83,12 @@ func main() {
 			Usage:  "URL to the PostgreSQL database",
 			EnvVar: "JUPITER_BRAIN_DATABASE_URL,DATABASE_URL",
 		},
+		cli.IntFlag{
+			Name:   "database-pool-size",
+			Usage:  "pool size",
+			EnvVar: "JUPITER_BRAIN_DATABASE_POOL_SIZE,DATABASE_POOL_SIZE",
+			Value:  2,
+		},
 		cli.BoolFlag{
 			Name:   "debug",
 			Usage:  "enable debug logging",
@@ -191,7 +197,8 @@ func runServer(c *cli.Context) {
 		VSphereConcurrentCreateOperations: c.Int("vsphere-concurrent-create-operations"),
 		VSphereConcurrentDeleteOperations: c.Int("vsphere-concurrent-delete-operations"),
 
-		DatabaseURL: c.String("database-url"),
+		DatabaseURL:      c.String("database-url"),
+		DatabasePoolSize: c.Int("database-pool-size"),
 
 		PprofAddr:      c.String("pprof-addr"),
 		RequestTimeout: c.Duration("request-timeout"),

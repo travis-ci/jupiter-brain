@@ -41,6 +41,9 @@ type Config struct {
 	// DatabaseURL is the PostgreSQL database URL wow!
 	DatabaseURL string
 
+	// DatabasePoolSize is the Database Connection pool size wow!
+	DatabasePoolSize int
+
 	// PprofAddr should be a non-empty string specifying where to bind
 	// net/http/pprof endpoints
 	PprofAddr string
