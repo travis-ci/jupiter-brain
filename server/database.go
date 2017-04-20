@@ -33,7 +33,7 @@ func newPGDatabase(databaseURL string, maxOpenDatabaseConnections int, dbAppName
 
 	// https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters
 	q := u.Query()
-	q.Set("application_name", "jupiter-brain")
+	q.Set("application_name", dbAppName)
 	u.RawQuery = q.Encode()
 
 	conn, err := sqlx.Open("postgres", u.String())
