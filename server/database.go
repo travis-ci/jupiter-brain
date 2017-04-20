@@ -25,7 +25,7 @@ type pgDatabase struct {
 	conn *sqlx.DB
 }
 
-func newPGDatabase(databaseURL string, maxOpenDatabaseConnections int) (*pgDatabase, error) {
+func newPGDatabase(databaseURL string, maxOpenDatabaseConnections int, dbAppName string) (*pgDatabase, error) {
 	u, err := url.Parse(databaseURL)
 	if err != nil {
 		return nil, err

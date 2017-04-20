@@ -89,6 +89,11 @@ func main() {
 			EnvVar: "JUPITER_BRAIN_DATABASE_POOL_SIZE,DATABASE_POOL_SIZE",
 			Value:  2,
 		},
+		cli.StringFlag{
+			Name:   "database-app-name",
+			Usage:  "app name",
+			EnvVar: "JUPITER_BRAIN_DATABASE_APP_NAME",
+		},
 		cli.BoolFlag{
 			Name:   "debug",
 			Usage:  "enable debug logging",
@@ -199,6 +204,7 @@ func runServer(c *cli.Context) {
 
 		DatabaseURL:      c.String("database-url"),
 		DatabasePoolSize: c.Int("database-pool-size"),
+		DatabaseAppName:  c.String("database-app-name"),
 
 		PprofAddr:      c.String("pprof-addr"),
 		RequestTimeout: c.Duration("request-timeout"),
