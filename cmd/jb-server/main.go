@@ -91,7 +91,7 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:   "database-app-name",
-			Usage:  "app name",
+			Usage:  "application name for Postgres connections",
 			EnvVar: "JUPITER_BRAIN_DATABASE_APP_NAME",
 		},
 		cli.BoolFlag{
