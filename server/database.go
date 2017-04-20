@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/url"
 	"time"
 
 	// Register PostgreSQL driver bits
@@ -24,8 +25,18 @@ type pgDatabase struct {
 	conn *sqlx.DB
 }
 
-func newPGDatabase(url string, maxOpenDatabaseConnections int) (*pgDatabase, error) {
-	conn, err := sqlx.Open("postgres", url)
+func newPGDatabase(databaseURL string, maxOpenDatabaseConnections int, dbAppName string) (*pgDatabase, error) {
+	u, err := url.Parse(databaseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters
+	q := u.Query()
+	q.Set("application_name", dbAppName)
+	u.RawQuery = q.Encode()
+
+	conn, err := sqlx.Open("postgres", u.String())
 	if err != nil {
 		return nil, err
 	}

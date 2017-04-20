@@ -44,6 +44,9 @@ type Config struct {
 	// DatabasePoolSize is the Database Connection pool size wow!
 	DatabasePoolSize int
 
+	//DatabaseAppName is the app name that gets listed in a PostgreSQL query
+	DatabaseAppName string
+
 	// PprofAddr should be a non-empty string specifying where to bind
 	// net/http/pprof endpoints
 	PprofAddr string
