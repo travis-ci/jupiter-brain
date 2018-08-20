@@ -280,7 +280,7 @@ func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request)
 func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Request) {
 	defer metrics.TimeSince("travis.jupiter-brain.endpoints.instances-create", time.Now())
 
-	var requestBody map[string]map[string]string
+	var requestBody map[string]*jupiterbrain.InstanceConfig
 
 	err := json.NewDecoder(req.Body).Decode(&requestBody)
 	if err != nil {
@@ -293,17 +293,17 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	if requestBody["data"]["type"] != "instances" {
+	if requestBody["data"].Type != "instances" {
 		jsonapi.Error(w, &jsonapi.JSONError{Status: "409", Code: "incorrect-type", Title: "data must be of type instances"}, http.StatusConflict)
 		return
 	}
 
-	if requestBody["data"]["base-image"] == "" {
+	if requestBody["data"].BaseImage == "" {
 		jsonapi.Error(w, &jsonapi.JSONError{Status: "422", Code: "missing-field", Title: "instance must have base-image field"}, 422)
 		return
 	}
 
-	instance, err := srv.i.Start(req.Context(), requestBody["data"]["base-image"])
+	instance, err := srv.i.Start(req.Context(), *requestBody["data"])
 	if err != nil {
 		ravenHTTP := raven.NewHttp(req)
 		ravenHTTP.Data = requestBody["data"]

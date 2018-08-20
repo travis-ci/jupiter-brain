@@ -150,11 +150,11 @@ func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) 
 	return instances, nil
 }
 
-func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*Instance, error) {
+func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfig) (*Instance, error) {
 	startTime := time.Now()
 	honeycombData := map[string]interface{}{
 		"event":      "clone",
-		"image_name": baseName,
+		"image_name": config.BaseImage,
 		"request_id": ctx.Value(jbcontext.RequestIDKey),
 	}
 
@@ -189,7 +189,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		return nil, err
 	}
 
-	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, baseName)
+	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, config.BaseImage)
 	if err != nil {
 		honeycombSend("find_base_vm_and_snapshot", err)
 		return nil, errors.Wrap(err, "failed to find base VM and snapshot")
