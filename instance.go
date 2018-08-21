@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/vmware/govmomi/vim25/types"
 )
 
 // Instance is our representation of an instance woop woop
@@ -33,4 +34,18 @@ type InstanceConfig struct {
 	// If RAM is 0, the amount of RAM will not be changed from what is configured in the
 	// base image.
 	RAM int `json:"ram"`
+}
+
+// ConfigSpec constructs a spec for reconfiguring the VM after it is cloned.
+// ConfigSpec returns nil if none of the config parameters for the VM are set.
+// In that case, no reconfigure task for the VM should be run.
+func (c InstanceConfig) ConfigSpec() *types.VirtualMachineConfigSpec {
+	if c.CPUCount == 0 && c.RAM == 0 {
+		return nil
+	}
+
+	return &types.VirtualMachineConfigSpec{
+		NumCPUs:  int32(c.CPUCount),
+		MemoryMB: int64(c.RAM),
+	}
 }

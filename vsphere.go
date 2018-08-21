@@ -318,6 +318,26 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 			return
 		}
 
+		// Reconfigure the VM if any changes from the base VM properties were requested.
+		configSpec := config.ConfigSpec()
+		if configSpec != nil {
+			task, err = newVM.Reconfigure(backgroundCtx, *configSpec)
+			if err != nil {
+				honeycombSend("reconfigure_vm_task", err)
+				go i.terminateIfExists(backgroundCtx, name.String())
+				errChan <- errors.Wrap(err, "failed to create reconfigure vm task")
+				return
+			}
+
+			err = task.Wait(backgroundCtx)
+			if err != nil {
+				honeycombSend("reconfigure_vm_task_wait", err)
+				go i.terminateIfExists(backgroundCtx, name.String())
+				errChan <- errors.Wrap(err, "reconfigure vm task failed")
+				return
+			}
+		}
+
 		powerOnStartTime := time.Now()
 		task, err = newVM.PowerOn(backgroundCtx)
 		if err != nil {
