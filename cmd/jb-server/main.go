@@ -141,6 +141,11 @@ func main() {
 			Usage:  "The dataset name for Honeycomb",
 			EnvVar: "JUPITER_BRAIN_HONEYCOMB_DATASET",
 		},
+		cli.StringFlag{
+			Name:   "honeycomb-request-dataset",
+			Usage:  "The dataset name for Honeycomb to track HTTP requests",
+			EnvVar: "JUPITER_BRAIN_HONEYCOMB_REQUEST_DATASET",
+		},
 	}
 	app.Action = runServer
 
