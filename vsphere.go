@@ -150,11 +150,11 @@ func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) 
 	return instances, nil
 }
 
-func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*Instance, error) {
+func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfig) (*Instance, error) {
 	startTime := time.Now()
 	honeycombData := map[string]interface{}{
 		"event":      "clone",
-		"image_name": baseName,
+		"image_name": config.BaseImage,
 		"request_id": ctx.Value(jbcontext.RequestIDKey),
 	}
 
@@ -189,7 +189,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 		return nil, err
 	}
 
-	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, baseName)
+	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, config.BaseImage)
 	if err != nil {
 		honeycombSend("find_base_vm_and_snapshot", err)
 		return nil, errors.Wrap(err, "failed to find base VM and snapshot")
@@ -316,6 +316,26 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, baseName string) (*I
 			// The HTTP context is cancelled, so let's delete the VM we just cloned instead of powering it on
 			errChan <- errors.Wrap(i.Terminate(backgroundCtx, name.String()), "error while trying to delete abandoned VM")
 			return
+		}
+
+		// Reconfigure the VM if any changes from the base VM properties were requested.
+		configSpec := config.ConfigSpec()
+		if configSpec != nil {
+			task, err = newVM.Reconfigure(backgroundCtx, *configSpec)
+			if err != nil {
+				honeycombSend("reconfigure_vm_task", err)
+				go i.terminateIfExists(backgroundCtx, name.String())
+				errChan <- errors.Wrap(err, "failed to create reconfigure vm task")
+				return
+			}
+
+			err = task.Wait(backgroundCtx)
+			if err != nil {
+				honeycombSend("reconfigure_vm_task_wait", err)
+				go i.terminateIfExists(backgroundCtx, name.String())
+				errChan <- errors.Wrap(err, "reconfigure vm task failed")
+				return
+			}
 		}
 
 		powerOnStartTime := time.Now()

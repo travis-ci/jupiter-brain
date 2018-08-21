@@ -19,7 +19,7 @@ func (i fakeInstanceManager) List(ctx context.Context) ([]*jupiterbrain.Instance
 	return []*jupiterbrain.Instance{}, nil
 }
 
-func (i fakeInstanceManager) Start(ctx context.Context, image string) (*jupiterbrain.Instance, error) {
+func (i fakeInstanceManager) Start(ctx context.Context, config jupiterbrain.InstanceConfig) (*jupiterbrain.Instance, error) {
 	return nil, nil
 }
 
