@@ -72,10 +72,34 @@
 			"notests": true
 		},
 		{
+			"importpath": "github.com/felixge/httpsnoop",
+			"repository": "https://github.com/felixge/httpsnoop",
+			"vcs": "git",
+			"revision": "eadd4fad6aac69ae62379194fe0219f3dbc80fd3",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/getsentry/raven-go",
 			"repository": "https://github.com/getsentry/raven-go",
 			"vcs": "git",
 			"revision": "3f7439d3e74d88e21d196ba20eb61a5a958bc118",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/go-sql-driver/mysql",
+			"repository": "https://github.com/go-sql-driver/mysql",
+			"vcs": "git",
+			"revision": "99ff426eb706cffe92ff3d058e168b278cabf7c7",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/google/uuid",
+			"repository": "https://github.com/google/uuid",
+			"vcs": "git",
+			"revision": "dec09d789f3dba190787f8b4454c7d3c936fed9e",
 			"branch": "master",
 			"notests": true
 		},
@@ -89,15 +113,24 @@
 		{
 			"importpath": "github.com/gorilla/mux",
 			"repository": "https://github.com/gorilla/mux",
-			"vcs": "",
-			"revision": "8096f47503459bcc74d1f4c487b7e6e42e5746b5",
-			"branch": "HEAD"
+			"vcs": "git",
+			"revision": "e48e440e4c92e3251d812f8ce7858944dfa3331c",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/honeycombio/beeline-go",
+			"repository": "https://github.com/honeycombio/beeline-go",
+			"vcs": "git",
+			"revision": "6acc807d0ea48acf418285c0262d71272591326e",
+			"branch": "master",
+			"notests": true
 		},
 		{
 			"importpath": "github.com/honeycombio/libhoney-go",
 			"repository": "https://github.com/honeycombio/libhoney-go",
 			"vcs": "git",
-			"revision": "7a3b7395daf1d2d1ccfcac3e6f7d8f22406509ba",
+			"revision": "741c87cf6e228e5c509705847b67a3245bc79b8b",
 			"branch": "master",
 			"notests": true
 		},
@@ -107,6 +140,14 @@
 			"vcs": "",
 			"revision": "344b1e96d6e410a093b7bce40287731a49e253f6",
 			"branch": "master"
+		},
+		{
+			"importpath": "github.com/julienschmidt/httprouter",
+			"repository": "https://github.com/julienschmidt/httprouter",
+			"vcs": "git",
+			"revision": "348b672cd90d8190f8240323e372ecd1e66b59dc",
+			"branch": "master",
+			"notests": true
 		},
 		{
 			"importpath": "github.com/lib/pq",
@@ -174,6 +215,23 @@
 			"vcs": "git",
 			"revision": "2cbad5127c61e13d72165f954543a7265625bebb",
 			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "goji.io",
+			"repository": "https://github.com/goji/goji",
+			"vcs": "git",
+			"revision": "0d89ff54b2c18c9c4ba530e32496aef902d3c6cd",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "google.golang.org/appengine/cloudsql",
+			"repository": "https://github.com/golang/appengine",
+			"vcs": "git",
+			"revision": "4216e58b9158e5f1c906f1aca75162a46a2ec88a",
+			"branch": "master",
+			"path": "/cloudsql",
 			"notests": true
 		},
 		{

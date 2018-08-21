@@ -8,6 +8,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	raven "github.com/getsentry/raven-go"
+	"github.com/honeycombio/beeline-go"
 	libhoney "github.com/honeycombio/libhoney-go"
 	librato "github.com/mihasya/go-metrics-librato"
 	metrics "github.com/rcrowley/go-metrics"
@@ -165,15 +166,24 @@ func runServer(c *cli.Context) {
 	go travismetrics.ReportMemstatsMetrics()
 
 	if c.String("honeycomb-write-key") != "" && c.String("honeycomb-dataset") != "" {
-		libhoney.Init(libhoney.Config{
-			WriteKey: c.String("honeycomb-write-key"),
-			Dataset:  c.String("honeycomb-dataset"),
-		})
-		defer libhoney.Close()
+		if c.String("honeycomb-dataset") != "" {
+			libhoney.Init(libhoney.Config{
+				WriteKey: c.String("honeycomb-write-key"),
+				Dataset:  c.String("honeycomb-dataset"),
+			})
+			defer libhoney.Close()
 
-		libhoney.AddDynamicField("num_goroutines", func() interface{} { return runtime.NumGoroutine() })
-		libhoney.AddField("jupiter_brain_version", c.App.Version)
-		libhoney.AddField("jupiter_brain_source", c.String("librato-source"))
+			libhoney.AddDynamicField("num_goroutines", func() interface{} { return runtime.NumGoroutine() })
+			libhoney.AddField("jupiter_brain_version", c.App.Version)
+			libhoney.AddField("jupiter_brain_source", c.String("librato-source"))
+		}
+
+		if c.String("honeycomb-request-dataset") != "" {
+			beeline.Init(beeline.Config{
+				WriteKey: c.String("honeycomb-write-key"),
+				Dataset:  c.String("honeycomb-request-dataset"),
+			})
+		}
 	}
 
 	raven.SetDSN(c.String("sentry-dsn"))

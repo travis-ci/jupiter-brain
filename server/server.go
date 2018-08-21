@@ -21,6 +21,8 @@ import (
 	"github.com/codegangsta/negroni"
 	raven "github.com/getsentry/raven-go"
 	"github.com/gorilla/mux"
+	"github.com/honeycombio/beeline-go/wrappers/hnygorilla"
+	"github.com/honeycombio/beeline-go/wrappers/hnynethttp"
 	"github.com/meatballhat/negroni-logrus"
 	"github.com/pkg/errors"
 	"github.com/travis-ci/jupiter-brain"
@@ -157,7 +159,8 @@ func (srv *server) setupMiddleware() {
 		panic(err)
 	}
 	srv.n.Use(nr)
-	srv.n.UseHandler(srv.r)
+	srv.r.Use(hnygorilla.Middleware)
+	srv.n.UseHandler(hnynethttp.WrapHandler(srv.r))
 }
 
 func (srv *server) setupPprof() {
