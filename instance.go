@@ -1,8 +1,10 @@
 package jupiterbrain
 
 import (
+	"context"
 	"time"
 
+	"github.com/honeycombio/beeline-go"
 	"github.com/lib/pq"
 	"github.com/vmware/govmomi/vim25/types"
 )
@@ -47,5 +49,17 @@ func (c InstanceConfig) ConfigSpec() *types.VirtualMachineConfigSpec {
 	return &types.VirtualMachineConfigSpec{
 		NumCPUs:  int32(c.CPUCount),
 		MemoryMB: int64(c.RAM),
+	}
+}
+
+// Track adds fields to the current Honeycomb event with information about the VM
+// config that was requested.
+func (c InstanceConfig) Track(ctx context.Context) {
+	beeline.AddField(ctx, "image_name", c.BaseImage)
+	if c.CPUCount != 0 {
+		beeline.AddField(ctx, "vm_cpus", c.CPUCount)
+	}
+	if c.RAM != 0 {
+		beeline.AddField(ctx, "vm_ram", c.RAM)
 	}
 }

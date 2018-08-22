@@ -151,7 +151,7 @@ func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) 
 
 func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfig) (*Instance, error) {
 	startTime := time.Now()
-	beeline.AddField(ctx, "image_name", config.BaseImage)
+	config.Track(ctx)
 
 	releaseSem, err := i.requestCreateSemaphore(ctx)
 	if err != nil {
