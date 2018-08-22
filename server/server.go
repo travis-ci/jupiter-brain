@@ -152,7 +152,6 @@ func (srv *server) setupMiddleware() {
 			next(rw, req)
 		}
 	})
-	srv.n.UseFunc(ResponseMetricsHandler)
 	srv.n.Use(negroni.HandlerFunc(srv.authMiddleware))
 	nr, err := negroniraven.NewMiddleware(srv.sentryDSN, srv.sentryEnvironment)
 	if err != nil {

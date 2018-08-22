@@ -170,25 +170,15 @@ func runServer(c *cli.Context) {
 	}
 	go travismetrics.ReportMemstatsMetrics()
 
-	if c.String("honeycomb-write-key") != "" {
-		if c.String("honeycomb-dataset") != "" {
-			libhoney.Init(libhoney.Config{
-				WriteKey: c.String("honeycomb-write-key"),
-				Dataset:  c.String("honeycomb-dataset"),
-			})
-			defer libhoney.Close()
+	if c.String("honeycomb-write-key") != "" && c.String("honeycomb-request-dataset") != "" {
+		beeline.Init(beeline.Config{
+			WriteKey:    c.String("honeycomb-write-key"),
+			Dataset:     c.String("honeycomb-request-dataset"),
+			ServiceName: c.String("librato-source"),
+		})
 
-			libhoney.AddDynamicField("num_goroutines", func() interface{} { return runtime.NumGoroutine() })
-			libhoney.AddField("jupiter_brain_version", c.App.Version)
-			libhoney.AddField("jupiter_brain_source", c.String("librato-source"))
-		}
-
-		if c.String("honeycomb-request-dataset") != "" {
-			beeline.Init(beeline.Config{
-				WriteKey: c.String("honeycomb-write-key"),
-				Dataset:  c.String("honeycomb-request-dataset"),
-			})
-		}
+		libhoney.AddDynamicField("meta.goroutines", func() interface{} { return runtime.NumGoroutine() })
+		libhoney.AddField("app.version", c.App.Version)
 	}
 
 	raven.SetDSN(c.String("sentry-dsn"))
