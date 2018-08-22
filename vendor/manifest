@@ -137,8 +137,8 @@
 		{
 			"importpath": "github.com/jmoiron/sqlx",
 			"repository": "https://github.com/jmoiron/sqlx",
-			"vcs": "",
-			"revision": "344b1e96d6e410a093b7bce40287731a49e253f6",
+			"vcs": "git",
+			"revision": "0dae4fefe7c0e190f7b5a78dac28a1c82cc8d849",
 			"branch": "master"
 		},
 		{

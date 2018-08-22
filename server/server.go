@@ -224,7 +224,7 @@ func (srv *server) handleInstancesList(w http.ResponseWriter, req *http.Request)
 			return
 		}
 
-		res, err := srv.db.FetchInstances(&databaseQuery{MinAge: dur})
+		res, err := srv.db.FetchInstances(req.Context(), &databaseQuery{MinAge: dur})
 		if err != nil {
 			jsonapi.Error(w, err, http.StatusBadRequest)
 			return
@@ -332,7 +332,7 @@ func (srv *server) handleInstancesCreate(w http.ResponseWriter, req *http.Reques
 	}()
 
 	instance.CreatedAt = time.Now().UTC()
-	err = srv.db.SaveInstance(instance)
+	err = srv.db.SaveInstance(req.Context(), instance)
 	if err != nil {
 		recoverDelete = true
 		jsonapi.Error(w, err, http.StatusInternalServerError)
@@ -426,7 +426,7 @@ func (srv *server) handleInstanceByIDTerminate(w http.ResponseWriter, req *http.
 		}
 	}
 
-	err = srv.db.DestroyInstance(vars["id"])
+	err = srv.db.DestroyInstance(req.Context(), vars["id"])
 	if err != nil {
 		jsonapi.Error(w, err, http.StatusInternalServerError)
 		return
@@ -445,7 +445,7 @@ func (srv *server) handleInstanceSync(w http.ResponseWriter, req *http.Request) 
 
 	for _, instance := range instances {
 		instance.CreatedAt = time.Now().UTC()
-		err = srv.db.SaveInstance(instance)
+		err = srv.db.SaveInstance(req.Context(), instance)
 		if err != nil {
 			srv.log.WithFields(logrus.Fields{
 				"err": err,

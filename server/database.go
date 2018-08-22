@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"time"
 
+	"github.com/honeycombio/beeline-go/wrappers/hnysqlx"
 	// Register PostgreSQL driver bits
 	_ "github.com/lib/pq"
 
@@ -11,9 +13,9 @@ import (
 )
 
 type database interface {
-	SaveInstance(*jupiterbrain.Instance) error
-	DestroyInstance(string) error
-	FetchInstances(*databaseQuery) ([]*jupiterbrain.Instance, error)
+	SaveInstance(context.Context, *jupiterbrain.Instance) error
+	DestroyInstance(context.Context, string) error
+	FetchInstances(context.Context, *databaseQuery) ([]*jupiterbrain.Instance, error)
 }
 
 type databaseQuery struct {
@@ -21,7 +23,7 @@ type databaseQuery struct {
 }
 
 type pgDatabase struct {
-	conn *sqlx.DB
+	conn *hnysqlx.DB
 }
 
 func newPGDatabase(url string, maxOpenDatabaseConnections int) (*pgDatabase, error) {
@@ -33,18 +35,18 @@ func newPGDatabase(url string, maxOpenDatabaseConnections int) (*pgDatabase, err
 	conn.DB.SetMaxOpenConns(maxOpenDatabaseConnections)
 
 	return &pgDatabase{
-		conn: conn,
+		conn: hnysqlx.WrapDB(conn),
 	}, nil
 }
 
-func (db *pgDatabase) SaveInstance(inst *jupiterbrain.Instance) error {
-	_, err := db.conn.Exec(`INSERT INTO jupiter_brain.instances(id, created_at) VALUES ($1, $2)`, inst.ID, inst.CreatedAt)
+func (db *pgDatabase) SaveInstance(ctx context.Context, inst *jupiterbrain.Instance) error {
+	_, err := db.conn.ExecContext(ctx, `INSERT INTO jupiter_brain.instances(id, created_at) VALUES ($1, $2)`, inst.ID, inst.CreatedAt)
 	return err
 }
 
-func (db *pgDatabase) FetchInstances(q *databaseQuery) ([]*jupiterbrain.Instance, error) {
+func (db *pgDatabase) FetchInstances(ctx context.Context, q *databaseQuery) ([]*jupiterbrain.Instance, error) {
 	instances := []*jupiterbrain.Instance{}
-	rows, err := db.conn.Queryx(`SELECT * FROM jupiter_brain.instances WHERE destroyed_at IS NULL AND ((now() AT TIME ZONE 'UTC') - created_at) >= $1::interval`, q.MinAge.String())
+	rows, err := db.conn.QueryxContext(ctx, `SELECT * FROM jupiter_brain.instances WHERE destroyed_at IS NULL AND ((now() AT TIME ZONE 'UTC') - created_at) >= $1::interval`, q.MinAge.String())
 	if err != nil {
 		return instances, err
 	}
@@ -64,7 +66,7 @@ func (db *pgDatabase) FetchInstances(q *databaseQuery) ([]*jupiterbrain.Instance
 	return instances, nil
 }
 
-func (db *pgDatabase) DestroyInstance(id string) error {
-	_, err := db.conn.Exec(`UPDATE jupiter_brain.instances SET destroyed_at = now() WHERE id = $1`, id)
+func (db *pgDatabase) DestroyInstance(ctx context.Context, id string) error {
+	_, err := db.conn.ExecContext(ctx, `UPDATE jupiter_brain.instances SET destroyed_at = now() WHERE id = $1`, id)
 	return err
 }
