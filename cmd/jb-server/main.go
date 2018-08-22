@@ -170,7 +170,7 @@ func runServer(c *cli.Context) {
 	}
 	go travismetrics.ReportMemstatsMetrics()
 
-	if c.String("honeycomb-write-key") != "" && c.String("honeycomb-dataset") != "" {
+	if c.String("honeycomb-write-key") != "" {
 		if c.String("honeycomb-dataset") != "" {
 			libhoney.Init(libhoney.Config{
 				WriteKey: c.String("honeycomb-write-key"),
