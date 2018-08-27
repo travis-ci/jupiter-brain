@@ -8,6 +8,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	raven "github.com/getsentry/raven-go"
+	"github.com/honeycombio/beeline-go"
 	libhoney "github.com/honeycombio/libhoney-go"
 	librato "github.com/mihasya/go-metrics-librato"
 	metrics "github.com/rcrowley/go-metrics"
@@ -140,6 +141,17 @@ func main() {
 			Usage:  "The dataset name for Honeycomb",
 			EnvVar: "JUPITER_BRAIN_HONEYCOMB_DATASET",
 		},
+		cli.StringFlag{
+			Name:   "honeycomb-request-dataset",
+			Usage:  "The dataset name for Honeycomb to track HTTP requests",
+			EnvVar: "JUPITER_BRAIN_HONEYCOMB_REQUEST_DATASET",
+		},
+		cli.IntFlag{
+			Name:   "honeycomb-sample-rate",
+			Usage:  "The rate at which to sample Honeycomb events",
+			EnvVar: "JUPITER_BRAIN_HONEYCOMB_SAMPLE_RATE",
+			Value:  1,
+		},
 	}
 	app.Action = runServer
 
@@ -164,16 +176,16 @@ func runServer(c *cli.Context) {
 	}
 	go travismetrics.ReportMemstatsMetrics()
 
-	if c.String("honeycomb-write-key") != "" && c.String("honeycomb-dataset") != "" {
-		libhoney.Init(libhoney.Config{
-			WriteKey: c.String("honeycomb-write-key"),
-			Dataset:  c.String("honeycomb-dataset"),
+	if c.String("honeycomb-write-key") != "" && c.String("honeycomb-request-dataset") != "" {
+		beeline.Init(beeline.Config{
+			WriteKey:    c.String("honeycomb-write-key"),
+			Dataset:     c.String("honeycomb-request-dataset"),
+			ServiceName: c.String("librato-source"),
+			SampleRate:  uint(c.Int("honeycomb-sample-rate")),
 		})
-		defer libhoney.Close()
 
-		libhoney.AddDynamicField("num_goroutines", func() interface{} { return runtime.NumGoroutine() })
-		libhoney.AddField("jupiter_brain_version", c.App.Version)
-		libhoney.AddField("jupiter_brain_source", c.String("librato-source"))
+		libhoney.AddDynamicField("meta.goroutines", func() interface{} { return runtime.NumGoroutine() })
+		libhoney.AddField("app.version", c.App.Version)
 	}
 
 	raven.SetDSN(c.String("sentry-dsn"))

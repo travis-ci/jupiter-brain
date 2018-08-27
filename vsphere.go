@@ -10,11 +10,10 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/getsentry/raven-go"
-	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/beeline-go"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/sony/gobreaker"
-	"github.com/travis-ci/jupiter-brain/jbcontext"
 	"github.com/travis-ci/jupiter-brain/metrics"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/object"
@@ -152,27 +151,12 @@ func (i *vSphereInstanceManager) List(ctx context.Context) ([]*Instance, error) 
 
 func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfig) (*Instance, error) {
 	startTime := time.Now()
-	honeycombData := map[string]interface{}{
-		"event":      "clone",
-		"image_name": config.BaseImage,
-		"request_id": ctx.Value(jbcontext.RequestIDKey),
-	}
-
-	honeycombSend := func(stage string, err error) {
-		honeycombData["total_ms"] = float64(time.Since(startTime).Nanoseconds()) / 1000000.0
-		if err != nil {
-			honeycombData["err"] = err.Error()
-			honeycombData["success"] = 0
-		} else {
-			honeycombData["success"] = 1
-		}
-		honeycombData["stage"] = stage
-		libhoney.SendNow(honeycombData)
-	}
+	config.Track(ctx)
 
 	releaseSem, err := i.requestCreateSemaphore(ctx)
 	if err != nil {
-		honeycombSend("waiting_for_semaphore", err)
+		beeline.AddField(ctx, "stage", "waiting_for_semaphore")
+		beeline.AddField(ctx, "err", err.Error())
 		return nil, errors.Wrap(err, "timed out waiting for concurrency semaphore")
 	}
 	autoreleaseSem := true
@@ -181,17 +165,19 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 			releaseSem()
 		}
 	}()
-	honeycombData["semaphore_ms"] = float64(time.Since(startTime).Nanoseconds()) / 1000000.0
+	beeline.AddField(ctx, "semaphore_ms", float64(time.Since(startTime).Nanoseconds())/1000000.0)
 
 	client, err := i.client(ctx)
 	if err != nil {
-		honeycombSend("get_client", err)
+		beeline.AddField(ctx, "stage", "get_client")
+		beeline.AddField(ctx, "err", err.Error())
 		return nil, err
 	}
 
 	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, config.BaseImage)
 	if err != nil {
-		honeycombSend("find_base_vm_and_snapshot", err)
+		beeline.AddField(ctx, "stage", "find_base_vm_and_snapshot")
+		beeline.AddField(ctx, "err", err.Error())
 		return nil, errors.Wrap(err, "failed to find base VM and snapshot")
 	}
 
@@ -199,13 +185,14 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		var mh mo.HostSystem
 		err := host.Properties(ctx, host.Reference(), []string{"name"}, &mh)
 		if err == nil {
-			honeycombData["image_host_name"] = mh.Name
+			beeline.AddField(ctx, "image_host_name", mh.Name)
 		}
 	}
 
 	resourcePool, err := i.resourcePool(ctx)
 	if err != nil {
-		honeycombSend("find_resource_pool", err)
+		beeline.AddField(ctx, "stage", "find_resource_pool")
+		beeline.AddField(ctx, "err", err.Error())
 		return nil, errors.Wrap(err, "failed to find resource pool")
 	}
 
@@ -222,20 +209,22 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 	}
 
 	name := uuid.NewRandom()
-	honeycombData["vm_name"] = name
+	beeline.AddField(ctx, "vm_name", name)
 
 	vmFolder, err := i.vmFolder(ctx)
 	if err != nil {
-		honeycombSend("find_vm_folder", err)
+		beeline.AddField(ctx, "stage", "find_vm_folder")
+		beeline.AddField(ctx, "err", err.Error())
 		return nil, err
 	}
 
-	honeycombData["setup_ms"] = float64(time.Since(startTime).Nanoseconds()) / 1000000.0
+	beeline.AddField(ctx, "setup_ms", float64(time.Since(startTime).Nanoseconds())/1000000.0)
 
 	cloneStartTime := time.Now()
 	task, err := vm.Clone(ctx, vmFolder, name.String(), cloneSpec)
 	if err != nil {
-		honeycombSend("clone_vm_task", err)
+		beeline.AddField(ctx, "stage", "clone_vm_task")
+		beeline.AddField(ctx, "err", err.Error())
 		go i.terminateIfExists(ctx, name.String())
 		return nil, errors.Wrap(err, "failed to create vm clone task")
 	}
@@ -255,7 +244,8 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 
 		err := task.Wait(backgroundCtx)
 		if err != nil {
-			honeycombSend("clone_vm_task_wait", err)
+			beeline.AddField(ctx, "stage", "clone_vm_task_wait")
+			beeline.AddField(ctx, "err", err.Error())
 			go i.terminateIfExists(backgroundCtx, name.String())
 			if err != context.Canceled && err != context.DeadlineExceeded {
 				var interfaces []raven.Interface
@@ -273,12 +263,13 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 			return
 		}
 		metrics.TimeSince("travis.jupiter-brain.tasks.clone", cloneStartTime)
-		honeycombData["clone_ms"] = float64(time.Since(cloneStartTime).Nanoseconds()) / 1000000.0
+		beeline.AddField(ctx, "clone_ms", float64(time.Since(cloneStartTime).Nanoseconds())/1000000.0)
 
 		var mt mo.Task
 		err = task.Properties(backgroundCtx, task.Reference(), []string{"info"}, &mt)
 		if err != nil {
-			honeycombSend("vm_clone_get_info", err)
+			beeline.AddField(ctx, "stage", "vm_clone_get_info")
+			beeline.AddField(ctx, "err", err.Error())
 			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Wrap(err, "failed to get vm info properties")
 			return
@@ -286,7 +277,8 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 
 		if mt.Info.Result == nil {
 			err = errors.Errorf("expected VM, but got nil")
-			honeycombSend("got_nil_vm", err)
+			beeline.AddField(ctx, "stage", "got_nil_vm")
+			beeline.AddField(ctx, "err", err.Error())
 			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- err
 			return
@@ -295,7 +287,8 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		vmManagedRef, ok := mt.Info.Result.(types.ManagedObjectReference)
 		if !ok {
 			err = errors.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
-			honeycombSend("vm_not_a_mo_ref", err)
+			beeline.AddField(ctx, "stage", "vm_not_a_mo_ref")
+			beeline.AddField(ctx, "err", err.Error())
 			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- err
 			return
@@ -307,12 +300,13 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 			var mh mo.HostSystem
 			err := host.Properties(backgroundCtx, host.Reference(), []string{"name"}, &mh)
 			if err == nil {
-				honeycombData["vm_clone_host_name"] = mh.Name
+				beeline.AddField(ctx, "vm_clone_host_name", mh.Name)
 			}
 		}
 
 		if ctx.Err() != nil {
-			honeycombSend("abandoning_after_clone", ctx.Err())
+			beeline.AddField(ctx, "stage", "abandoning_after_clone")
+			beeline.AddField(ctx, "err", ctx.Err().Error())
 			// The HTTP context is cancelled, so let's delete the VM we just cloned instead of powering it on
 			errChan <- errors.Wrap(i.Terminate(backgroundCtx, name.String()), "error while trying to delete abandoned VM")
 			return
@@ -323,7 +317,8 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		if configSpec != nil {
 			task, err = newVM.Reconfigure(backgroundCtx, *configSpec)
 			if err != nil {
-				honeycombSend("reconfigure_vm_task", err)
+				beeline.AddField(ctx, "stage", "reconfigure_vm_task")
+				beeline.AddField(ctx, "err", err.Error())
 				go i.terminateIfExists(backgroundCtx, name.String())
 				errChan <- errors.Wrap(err, "failed to create reconfigure vm task")
 				return
@@ -331,7 +326,8 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 
 			err = task.Wait(backgroundCtx)
 			if err != nil {
-				honeycombSend("reconfigure_vm_task_wait", err)
+				beeline.AddField(ctx, "stage", "reconfigure_vm_task_wait")
+				beeline.AddField(ctx, "err", err.Error())
 				go i.terminateIfExists(backgroundCtx, name.String())
 				errChan <- errors.Wrap(err, "reconfigure vm task failed")
 				return
@@ -341,7 +337,8 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		powerOnStartTime := time.Now()
 		task, err = newVM.PowerOn(backgroundCtx)
 		if err != nil {
-			honeycombSend("power_on_vm_task", err)
+			beeline.AddField(ctx, "stage", "power_on_vm_task")
+			beeline.AddField(ctx, "err", err.Error())
 			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Wrap(err, "failed to create vm power on task")
 			return
@@ -349,7 +346,8 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 
 		err = task.Wait(backgroundCtx)
 		if err != nil {
-			honeycombSend("power_on_vm_task_wait", err)
+			beeline.AddField(ctx, "stage", "power_on_vm_task_wait")
+			beeline.AddField(ctx, "err", err.Error())
 			go i.terminateIfExists(backgroundCtx, name.String())
 			if err != context.Canceled && err != context.DeadlineExceeded {
 				var interfaces []raven.Interface
@@ -368,24 +366,25 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		}
 		metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
 		metrics.TimeSince("travis.jupiter-brain.tasks.full-start", startTime)
-		honeycombData["power_on_ms"] = float64(time.Since(powerOnStartTime).Nanoseconds()) / 1000000.0
+		beeline.AddField(ctx, "power_on_ms", float64(time.Since(powerOnStartTime).Nanoseconds())/1000000.0)
 
 		if host, _ := newVM.HostSystem(ctx); host != nil {
 			var mh mo.HostSystem
 			err := host.Properties(ctx, host.Reference(), []string{"name"}, &mh)
 			if err == nil {
-				honeycombData["vm_power_on_host_name"] = mh.Name
+				beeline.AddField(ctx, "vm_power_on_host_name", mh.Name)
 			}
 		}
 
 		if ctx.Err() != nil {
-			honeycombSend("abandoning_after_power_on", ctx.Err())
+			beeline.AddField(ctx, "stage", "abandoning_after_power_on")
+			beeline.AddField(ctx, "err", ctx.Err().Error())
 			// The HTTP context is cancelled, so let's delete the VM we just cloned instead of returning it
 			errChan <- errors.Wrap(i.Terminate(backgroundCtx, name.String()), "error while trying to delete abandoned VM")
 			return
 		}
 
-		honeycombSend("finished", nil)
+		beeline.AddField(ctx, "stage", "finished")
 		vmChan <- newVM
 	}()
 
@@ -401,27 +400,12 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 
 func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error {
 	startTime := time.Now()
-	honeycombData := map[string]interface{}{
-		"event":      "terminate",
-		"vm_name":    id,
-		"request_id": ctx.Value(jbcontext.RequestIDKey),
-	}
-
-	honeycombSend := func(stage string, err error) {
-		honeycombData["total_ms"] = float64(time.Since(startTime).Nanoseconds()) / 1000000.0
-		if err != nil {
-			honeycombData["err"] = err.Error()
-			honeycombData["success"] = 0
-		} else {
-			honeycombData["success"] = 1
-		}
-		honeycombData["stage"] = stage
-		libhoney.SendNow(honeycombData)
-	}
+	beeline.AddField(ctx, "vm_name", id)
 
 	releaseSem, err := i.requestDeleteSemaphore(ctx)
 	if err != nil {
-		honeycombSend("waiting_for_semaphore", err)
+		beeline.AddField(ctx, "stage", "waiting_for_semaphore")
+		beeline.AddField(ctx, "err", err.Error())
 		return errors.Wrap(err, "timed out waiting for concurrency semaphore")
 	}
 	autoreleaseSem := true
@@ -430,11 +414,12 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 			releaseSem()
 		}
 	}()
-	honeycombData["semaphore_ms"] = float64(time.Since(startTime).Nanoseconds()) / 1000000.0
+	beeline.AddField(ctx, "semaphore_ms", float64(time.Since(startTime).Nanoseconds())/1000000.0)
 
 	client, err := i.client(ctx)
 	if err != nil {
-		honeycombSend("get_client", err)
+		beeline.AddField(ctx, "stage", "get_client")
+		beeline.AddField(ctx, "err", err.Error())
 		return err
 	}
 
@@ -442,27 +427,31 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 
 	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.VMPath+id)
 	if err != nil {
-		honeycombSend("find_vm", err)
+		beeline.AddField(ctx, "stage", "find_vm")
+		beeline.AddField(ctx, "err", err.Error())
 		return errors.Wrap(err, "failed to search for vm")
 	}
 
 	if vmRef == nil {
 		err = VirtualMachineNotFoundError{Path: i.paths.VMPath, ID: id}
-		honeycombSend("vm_404", err)
+		beeline.AddField(ctx, "stage", "vm_404")
+		beeline.AddField(ctx, "err", err.Error())
 		return err
 	}
 
 	vm, ok := vmRef.(*object.VirtualMachine)
 	if !ok {
 		err = errors.Errorf("not a VM, but a %T", vm)
-		honeycombSend("vm_incorrect_type", err)
+		beeline.AddField(ctx, "stage", "vm_incorrect_type")
+		beeline.AddField(ctx, "err", err.Error())
 		return err
 	}
 
 	powerOffStartTime := time.Now()
 	task, err := vm.PowerOff(ctx)
 	if err != nil {
-		honeycombSend("vm_power_off_task", err)
+		beeline.AddField(ctx, "stage", "vm_power_off_task")
+		beeline.AddField(ctx, "err", err.Error())
 		return errors.Wrap(err, "failed to create vm power off task")
 	}
 
@@ -484,27 +473,29 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 			// if the VM is still powered on.
 
 			// Send the error to Honeycomb, though
-			honeycombData["power_off_err"] = err
+			beeline.AddField(ctx, "power_off_err", err)
 		}
-		honeycombData["power_off_ms"] = float64(time.Since(powerOffStartTime).Nanoseconds()) / 1000000.0
+		beeline.AddField(ctx, "power_off_ms", float64(time.Since(powerOffStartTime).Nanoseconds())/1000000.0)
 
 		destroyStartTime := time.Now()
 		task, err = vm.Destroy(ctx)
 		if err != nil {
-			honeycombSend("destroy_vm_task", err)
+			beeline.AddField(ctx, "stage", "destroy_vm_task")
+			beeline.AddField(ctx, "err", err.Error())
 			errChan <- errors.Wrap(err, "failed to create vm destroy task")
 			return
 		}
 
 		err = task.Wait(ctx)
 		if err != nil {
-			honeycombSend("destroy_vm_task_wait", err)
+			beeline.AddField(ctx, "stage", "destroy_vm_task_wait")
+			beeline.AddField(ctx, "err", err.Error())
 			errChan <- errors.Wrap(err, "vm destroy task failed")
 			return
 		}
-		honeycombData["destroy_ms"] = float64(time.Since(destroyStartTime).Nanoseconds()) / 1000000.0
+		beeline.AddField(ctx, "destroy_ms", float64(time.Since(destroyStartTime).Nanoseconds())/1000000.0)
 
-		honeycombSend("finished", nil)
+		beeline.AddField(ctx, "stage", "finished")
 		errChan <- nil
 	}()
 
