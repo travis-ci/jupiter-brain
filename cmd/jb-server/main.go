@@ -146,6 +146,12 @@ func main() {
 			Usage:  "The dataset name for Honeycomb to track HTTP requests",
 			EnvVar: "JUPITER_BRAIN_HONEYCOMB_REQUEST_DATASET",
 		},
+		cli.IntFlag{
+			Name:   "honeycomb-sample-rate",
+			Usage:  "The rate at which to sample Honeycomb events",
+			EnvVar: "JUPITER_BRAIN_HONEYCOMB_SAMPLE_RATE",
+			Value:  1,
+		},
 	}
 	app.Action = runServer
 
@@ -175,6 +181,7 @@ func runServer(c *cli.Context) {
 			WriteKey:    c.String("honeycomb-write-key"),
 			Dataset:     c.String("honeycomb-request-dataset"),
 			ServiceName: c.String("librato-source"),
+			SampleRate:  uint(c.Int("honeycomb-sample-rate")),
 		})
 
 		libhoney.AddDynamicField("meta.goroutines", func() interface{} { return runtime.NumGoroutine() })
