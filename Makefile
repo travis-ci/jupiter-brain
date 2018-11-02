@@ -7,7 +7,10 @@ REV_VAR := main.RevisionString
 REV_VALUE ?= $(shell git rev-parse HEAD 2> /dev/null || echo "???")
 GENERATED_VAR := main.GeneratedString
 GENERATED_VALUE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%S%z')
+DOCKER_IMAGE_REPO ?= travisci/jupiter-brain
+DOCKER_DEST ?= $(DOCKER_IMAGE_REPO):$(VERSION_VALUE)
 
+DOCKER ?= docker
 GO ?= go
 GVT ?= gvt
 GOPATH := $(shell echo $${GOPATH%%:*})
@@ -55,6 +58,10 @@ coverage.coverprofile: $(COVERPROFILES)
 .PHONY: build
 build: deps
 	$(GO) install $(GOBUILD_LDFLAGS) $(ALL_PACKAGES)
+
+.PHONY: docker-build
+docker-build:
+	$(DOCKER) build -t $(DOCKER_DEST) .
 
 .PHONY: update
 update:

@@ -1,6 +1,8 @@
 language: go
 go: '1.10.3'
-sudo: false
+
+services:
+  - docker
 
 env:
   global:
@@ -24,6 +26,13 @@ script:
 - make test-race
 - git diff --exit-code
 - git diff --cached --exit-code
+- make docker-build
+
+deploy:
+  provider: script
+  script: utils/docker-push
+  on:
+    condition: "$TRAVIS_PULL_REQUEST == false"
 
 after_success:
 - mkdir -p build/$UNAME/amd64
