@@ -31,6 +31,8 @@ script:
 deploy:
   provider: script
   script: utils/docker-push
+  # we don't need this for docker, but the artifacts push does
+  skip_cleanup: true
   on:
     # push all non-PR builds to Docker Hub
     all_branches: true
