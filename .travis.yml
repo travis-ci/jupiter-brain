@@ -32,6 +32,8 @@ deploy:
   provider: script
   script: utils/docker-push
   on:
+    # push all non-PR builds to Docker Hub
+    all_branches: true
     condition: "$TRAVIS_PULL_REQUEST == false"
 
 after_success:
