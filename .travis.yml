@@ -1,6 +1,5 @@
 language: go
-go: '1.10.3'
-sudo: false
+go: 1.11.x
 
 env:
   global:
@@ -24,6 +23,17 @@ script:
 - make test-race
 - git diff --exit-code
 - git diff --cached --exit-code
+- make docker-build
+
+deploy:
+  provider: script
+  script: utils/docker-push
+  # we don't need this for docker, but the artifacts push does
+  skip_cleanup: true
+  on:
+    # push all non-PR builds to Docker Hub
+    all_branches: true
+    condition: "$TRAVIS_PULL_REQUEST == false"
 
 after_success:
 - mkdir -p build/$UNAME/amd64
