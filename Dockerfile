@@ -7,12 +7,10 @@ RUN update-ca-certificates
 WORKDIR /go/src/github.com/travis-ci/jupiter-brain
 
 COPY . .
-#RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix nocgo -o /jb-server github.com/travis-ci/jupiter-brain/cmd/jb-server
 RUN make deps
 ENV CGO_ENABLED 0
 RUN make build
 
-# Use the official Packer image as our base
 FROM scratch
 
 # Copy things from the other stages
