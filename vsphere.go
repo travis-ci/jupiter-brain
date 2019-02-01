@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
-	"sync"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -13,13 +12,11 @@ import (
 	"github.com/honeycombio/beeline-go"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
-	"github.com/sony/gobreaker"
 	"github.com/travis-ci/jupiter-brain/metrics"
+	"github.com/travis-ci/jupiter-brain/pkg/vsphereutil"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/object"
-	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/mo"
-	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 )
 
@@ -30,26 +27,9 @@ type vSphereInstanceManager struct {
 	createConcurrencySem chan struct{}
 	deleteConcurrencySem chan struct{}
 
-	vSphereClientMutex sync.Mutex
-	vSphereClient      *govmomi.Client
-
-	vSphereURL *url.URL
+	clientProvider vsphereutil.ClientProvider
 
 	paths VSpherePaths
-}
-
-type soapBreakerRoundTripper struct {
-	rt soap.RoundTripper
-	cb *gobreaker.CircuitBreaker
-}
-
-func (rt *soapBreakerRoundTripper) RoundTrip(ctx context.Context, req, res soap.HasFault) error {
-	_, err := rt.cb.Execute(func() (interface{}, error) {
-		err := rt.rt.RoundTrip(ctx, req, res)
-		return nil, err
-	})
-
-	return err
 }
 
 // VSpherePaths holds some vSphere inventory paths that are required for the
@@ -75,7 +55,7 @@ type VSpherePaths struct {
 func NewVSphereInstanceManager(log *logrus.Logger, vSphereURL *url.URL, paths VSpherePaths, readConcurrency, createConcurrency, deleteConcurrency int) InstanceManager {
 	return &vSphereInstanceManager{
 		log:                  log,
-		vSphereURL:           vSphereURL,
+		clientProvider:       vsphereutil.NewClientProvider(vSphereURL, true),
 		paths:                paths,
 		readConcurrencySem:   make(chan struct{}, readConcurrency),
 		createConcurrencySem: make(chan struct{}, createConcurrency),
@@ -518,59 +498,7 @@ func (i *vSphereInstanceManager) terminateIfExists(ctx context.Context, name str
 }
 
 func (i *vSphereInstanceManager) client(ctx context.Context) (*govmomi.Client, error) {
-	i.vSphereClientMutex.Lock()
-	defer i.vSphereClientMutex.Unlock()
-
-	if i.vSphereClient == nil {
-		client, err := i.createClient(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		i.vSphereClient = client
-		return i.vSphereClient, nil
-	}
-
-	active, err := i.vSphereClient.SessionManager.SessionIsActive(ctx)
-	if err != nil {
-		client, err := i.createClient(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		i.vSphereClient = client
-		return i.vSphereClient, nil
-	}
-
-	if !active {
-		err := i.vSphereClient.SessionManager.Login(ctx, i.vSphereURL.User)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to log in to vsphere api")
-		}
-	}
-
-	return i.vSphereClient, nil
-}
-
-func (i *vSphereInstanceManager) createClient(ctx context.Context) (*govmomi.Client, error) {
-	client, err := govmomi.NewClient(ctx, i.vSphereURL, true)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create govmomi client")
-	}
-
-	client.Client.RoundTripper = vim25.Retry(client.Client.RoundTripper, vim25.TemporaryNetworkError(3))
-	client.Client.RoundTripper = &soapBreakerRoundTripper{
-		rt: client.Client.RoundTripper,
-		cb: gobreaker.NewCircuitBreaker(gobreaker.Settings{
-			Name: "vSphere govmomi",
-			ReadyToTrip: func(counts gobreaker.Counts) bool {
-				failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
-				return counts.Requests >= 3 && failureRatio >= 0.6
-			},
-		}),
-	}
-
-	return client, nil
+	return i.clientProvider.Get(ctx)
 }
 
 func (i *vSphereInstanceManager) vmFolder(ctx context.Context) (*object.Folder, error) {
