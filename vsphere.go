@@ -16,6 +16,7 @@ import (
 	"github.com/travis-ci/jupiter-brain/pkg/vsphereutil"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/vim25/methods"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 )
@@ -154,7 +155,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		return nil, err
 	}
 
-	vm, snapshotTree, err := i.findBaseVMAndSnapshot(ctx, config.BaseImage)
+	vm, snapshotTree, isFrozen, err := i.findBaseVMAndSnapshot(ctx, config.BaseImage)
 	if err != nil {
 		beeline.AddField(ctx, "stage", "find_base_vm_and_snapshot")
 		beeline.AddField(ctx, "err", err.Error())
@@ -167,25 +168,6 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		if err == nil {
 			beeline.AddField(ctx, "image_host_name", mh.Name)
 		}
-	}
-
-	resourcePool, err := i.resourcePool(ctx)
-	if err != nil {
-		beeline.AddField(ctx, "stage", "find_resource_pool")
-		beeline.AddField(ctx, "err", err.Error())
-		return nil, errors.Wrap(err, "failed to find resource pool")
-	}
-
-	relocateSpec := types.VirtualMachineRelocateSpec{
-		DiskMoveType: string(types.VirtualMachineRelocateDiskMoveOptionsCreateNewChildDiskBacking),
-		Pool:         resourcePool,
-	}
-
-	cloneSpec := types.VirtualMachineCloneSpec{
-		Location: relocateSpec,
-		PowerOn:  false,
-		Template: false,
-		Snapshot: &snapshotTree.Snapshot,
 	}
 
 	name := uuid.NewRandom()
@@ -201,7 +183,14 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 	beeline.AddField(ctx, "setup_ms", float64(time.Since(startTime).Nanoseconds())/1000000.0)
 
 	cloneStartTime := time.Now()
-	task, err := vm.Clone(ctx, vmFolder, name.String(), cloneSpec)
+
+	var task *object.Task
+	if isFrozen {
+		task, err = i.createInstantClone(ctx, vm, vmFolder, name.String())
+	} else {
+		task, err = i.createLinkedClone(ctx, vm, snapshotTree, vmFolder, name.String())
+	}
+
 	if err != nil {
 		beeline.AddField(ctx, "stage", "clone_vm_task")
 		beeline.AddField(ctx, "err", err.Error())
@@ -292,61 +281,64 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 			return
 		}
 
-		// Reconfigure the VM if any changes from the base VM properties were requested.
-		configSpec := config.ConfigSpec()
-		if configSpec != nil {
-			task, err = newVM.Reconfigure(backgroundCtx, *configSpec)
+		// If we do an instant clone, the VM can't be reconfigured and will already be running.
+		if !isFrozen {
+			// Reconfigure the VM if any changes from the base VM properties were requested.
+			configSpec := config.ConfigSpec()
+			if configSpec != nil {
+				task, err = newVM.Reconfigure(backgroundCtx, *configSpec)
+				if err != nil {
+					beeline.AddField(ctx, "stage", "reconfigure_vm_task")
+					beeline.AddField(ctx, "err", err.Error())
+					go i.terminateIfExists(backgroundCtx, name.String())
+					errChan <- errors.Wrap(err, "failed to create reconfigure vm task")
+					return
+				}
+
+				err = task.Wait(backgroundCtx)
+				if err != nil {
+					beeline.AddField(ctx, "stage", "reconfigure_vm_task_wait")
+					beeline.AddField(ctx, "err", err.Error())
+					go i.terminateIfExists(backgroundCtx, name.String())
+					errChan <- errors.Wrap(err, "reconfigure vm task failed")
+					return
+				}
+			}
+
+			powerOnStartTime := time.Now()
+			task, err = newVM.PowerOn(backgroundCtx)
 			if err != nil {
-				beeline.AddField(ctx, "stage", "reconfigure_vm_task")
+				beeline.AddField(ctx, "stage", "power_on_vm_task")
 				beeline.AddField(ctx, "err", err.Error())
 				go i.terminateIfExists(backgroundCtx, name.String())
-				errChan <- errors.Wrap(err, "failed to create reconfigure vm task")
+				errChan <- errors.Wrap(err, "failed to create vm power on task")
 				return
 			}
 
 			err = task.Wait(backgroundCtx)
 			if err != nil {
-				beeline.AddField(ctx, "stage", "reconfigure_vm_task_wait")
+				beeline.AddField(ctx, "stage", "power_on_vm_task_wait")
 				beeline.AddField(ctx, "err", err.Error())
 				go i.terminateIfExists(backgroundCtx, name.String())
-				errChan <- errors.Wrap(err, "reconfigure vm task failed")
+				if err != context.Canceled && err != context.DeadlineExceeded {
+					var interfaces []raven.Interface
+
+					faultCause := getFaultCause(err)
+					if faultCause != "" {
+						interfaces = append(interfaces, &raven.Message{
+							Message: fmt.Sprintf("faultCause: %s", faultCause),
+						})
+					}
+
+					raven.CaptureError(err, map[string]string{"vm-name": name.String(), "task": "power-on"}, interfaces...)
+				}
+				errChan <- errors.Wrap(err, "vm power on task failed")
 				return
 			}
+			metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
+			metrics.TimeSince("travis.jupiter-brain.tasks.full-start", startTime)
+			beeline.AddField(ctx, "power_on_ms", float64(time.Since(powerOnStartTime).Nanoseconds())/1000000.0)
 		}
-
-		powerOnStartTime := time.Now()
-		task, err = newVM.PowerOn(backgroundCtx)
-		if err != nil {
-			beeline.AddField(ctx, "stage", "power_on_vm_task")
-			beeline.AddField(ctx, "err", err.Error())
-			go i.terminateIfExists(backgroundCtx, name.String())
-			errChan <- errors.Wrap(err, "failed to create vm power on task")
-			return
-		}
-
-		err = task.Wait(backgroundCtx)
-		if err != nil {
-			beeline.AddField(ctx, "stage", "power_on_vm_task_wait")
-			beeline.AddField(ctx, "err", err.Error())
-			go i.terminateIfExists(backgroundCtx, name.String())
-			if err != context.Canceled && err != context.DeadlineExceeded {
-				var interfaces []raven.Interface
-
-				faultCause := getFaultCause(err)
-				if faultCause != "" {
-					interfaces = append(interfaces, &raven.Message{
-						Message: fmt.Sprintf("faultCause: %s", faultCause),
-					})
-				}
-
-				raven.CaptureError(err, map[string]string{"vm-name": name.String(), "task": "power-on"}, interfaces...)
-			}
-			errChan <- errors.Wrap(err, "vm power on task failed")
-			return
-		}
-		metrics.TimeSince("travis.jupiter-brain.tasks.power-on", powerOnStartTime)
-		metrics.TimeSince("travis.jupiter-brain.tasks.full-start", startTime)
-		beeline.AddField(ctx, "power_on_ms", float64(time.Since(powerOnStartTime).Nanoseconds())/1000000.0)
 
 		if host, _ := newVM.HostSystem(ctx); host != nil {
 			var mh mo.HostSystem
@@ -376,6 +368,58 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 	case <-ctx.Done():
 		return nil, errors.Wrap(ctx.Err(), "context finished while waiting for VM clone and power on")
 	}
+}
+
+func (i *vSphereInstanceManager) createLinkedClone(ctx context.Context, baseVM *object.VirtualMachine, snapshotTree types.VirtualMachineSnapshotTree, vmFolder *object.Folder, name string) (*object.Task, error) {
+	beeline.AddField(ctx, "instant_clone", false)
+
+	resourcePool, err := i.resourcePool(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to find resource pool")
+	}
+
+	relocateSpec := types.VirtualMachineRelocateSpec{
+		DiskMoveType: string(types.VirtualMachineRelocateDiskMoveOptionsCreateNewChildDiskBacking),
+		Pool:         resourcePool,
+	}
+
+	cloneSpec := types.VirtualMachineCloneSpec{
+		Location: relocateSpec,
+		PowerOn:  false,
+		Template: false,
+		Snapshot: &snapshotTree.Snapshot,
+	}
+
+	return baseVM.Clone(ctx, vmFolder, name, cloneSpec)
+}
+
+func (i *vSphereInstanceManager) createInstantClone(ctx context.Context, baseVM *object.VirtualMachine, vmFolder *object.Folder, name string) (*object.Task, error) {
+	beeline.AddField(ctx, "instant_clone", true)
+
+	destFolderRef := vmFolder.Reference()
+	cloneSpec := types.VirtualMachineInstantCloneSpec{
+		Name: name,
+		Location: types.VirtualMachineRelocateSpec{
+			Folder: &destFolderRef,
+		},
+	}
+
+	req := types.InstantClone_Task{
+		This: baseVM.Reference(),
+		Spec: cloneSpec,
+	}
+
+	client, err := i.client(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := methods.InstantClone_Task(ctx, client.Client, &req)
+	if err != nil {
+		return nil, err
+	}
+
+	return object.NewTask(client.Client, res.Returnval), nil
 }
 
 func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error {
@@ -557,44 +601,48 @@ func (i *vSphereInstanceManager) resourcePool(ctx context.Context) (*types.Manag
 	return mccr.ResourcePool, nil
 }
 
-func (i *vSphereInstanceManager) findBaseVMAndSnapshot(ctx context.Context, name string) (*object.VirtualMachine, types.VirtualMachineSnapshotTree, error) {
+func (i *vSphereInstanceManager) findBaseVMAndSnapshot(ctx context.Context, name string) (*object.VirtualMachine, types.VirtualMachineSnapshotTree, bool, error) {
 	client, err := i.client(ctx)
 	if err != nil {
-		return nil, types.VirtualMachineSnapshotTree{}, err
+		return nil, types.VirtualMachineSnapshotTree{}, false, err
 	}
 
 	searchIndex := object.NewSearchIndex(client.Client)
 
 	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.BasePath+name)
 	if err != nil {
-		return nil, types.VirtualMachineSnapshotTree{}, errors.Wrap(err, "failed to search for VM")
+		return nil, types.VirtualMachineSnapshotTree{}, false, errors.Wrap(err, "failed to search for VM")
 	}
 
 	if vmRef == nil {
-		return nil, types.VirtualMachineSnapshotTree{}, BaseVirtualMachineNotFoundError{Path: i.paths.BasePath, Name: name}
+		return nil, types.VirtualMachineSnapshotTree{}, false, BaseVirtualMachineNotFoundError{Path: i.paths.BasePath, Name: name}
 	}
 
 	vm, ok := vmRef.(*object.VirtualMachine)
 	if !ok {
-		return nil, types.VirtualMachineSnapshotTree{}, errors.Errorf("base VM %s is a %T, but expected VirtualMachine", name, vmRef)
+		return nil, types.VirtualMachineSnapshotTree{}, false, errors.Errorf("base VM %s is a %T, but expected VirtualMachine", name, vmRef)
 	}
 
 	var mvm mo.VirtualMachine
-	err = vm.Properties(ctx, vm.Reference(), []string{"snapshot"}, &mvm)
+	err = vm.Properties(ctx, vm.Reference(), []string{"snapshot", "runtime.instantCloneFrozen"}, &mvm)
 	if err != nil {
-		return nil, types.VirtualMachineSnapshotTree{}, errors.Wrap(err, "failed to get snapshot")
+		return nil, types.VirtualMachineSnapshotTree{}, false, errors.Wrap(err, "failed to get snapshot")
 	}
 
 	if mvm.Snapshot == nil {
-		return nil, types.VirtualMachineSnapshotTree{}, errors.Errorf("no snapshots")
+		return nil, types.VirtualMachineSnapshotTree{}, false, errors.Errorf("no snapshots")
 	}
 
 	snapshotTree, ok := i.findSnapshot(mvm.Snapshot.RootSnapshotList, "base")
 	if !ok {
-		return nil, types.VirtualMachineSnapshotTree{}, errors.Errorf("no snapshot with name 'base'")
+		return nil, types.VirtualMachineSnapshotTree{}, false, errors.Errorf("no snapshot with name 'base'")
 	}
 
-	return vm, snapshotTree, nil
+	if mvm.Runtime.InstantCloneFrozen == nil {
+		return nil, types.VirtualMachineSnapshotTree{}, false, errors.Errorf("could not determine frozen status")
+	}
+
+	return vm, snapshotTree, *mvm.Runtime.InstantCloneFrozen, nil
 }
 
 func (i *vSphereInstanceManager) findSnapshot(roots []types.VirtualMachineSnapshotTree, name string) (types.VirtualMachineSnapshotTree, bool) {
