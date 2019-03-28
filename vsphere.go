@@ -137,7 +137,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 	releaseSem, err := i.requestCreateSemaphore(ctx)
 	if err != nil {
 		beeline.AddField(ctx, "stage", "waiting_for_semaphore")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		return nil, errors.Wrap(err, "timed out waiting for concurrency semaphore")
 	}
 	autoreleaseSem := true
@@ -151,14 +151,14 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 	client, err := i.client(ctx)
 	if err != nil {
 		beeline.AddField(ctx, "stage", "get_client")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		return nil, err
 	}
 
 	vm, snapshotTree, isFrozen, err := i.findBaseVMAndSnapshot(ctx, config.BaseImage)
 	if err != nil {
 		beeline.AddField(ctx, "stage", "find_base_vm_and_snapshot")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		return nil, errors.Wrap(err, "failed to find base VM and snapshot")
 	}
 
@@ -176,7 +176,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 	vmFolder, err := i.vmFolder(ctx)
 	if err != nil {
 		beeline.AddField(ctx, "stage", "find_vm_folder")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		return nil, err
 	}
 
@@ -198,7 +198,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 
 	if err != nil {
 		beeline.AddField(ctx, "stage", "clone_vm_task")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		go i.terminateIfExists(ctx, name.String())
 		return nil, errors.Wrap(err, "failed to create vm clone task")
 	}
@@ -219,7 +219,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		err := task.Wait(backgroundCtx)
 		if err != nil {
 			beeline.AddField(ctx, "stage", "clone_vm_task_wait")
-			beeline.AddField(ctx, "err", err.Error())
+			beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 			go i.terminateIfExists(backgroundCtx, name.String())
 			if err != context.Canceled && err != context.DeadlineExceeded {
 				var interfaces []raven.Interface
@@ -243,7 +243,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		err = task.Properties(backgroundCtx, task.Reference(), []string{"info"}, &mt)
 		if err != nil {
 			beeline.AddField(ctx, "stage", "vm_clone_get_info")
-			beeline.AddField(ctx, "err", err.Error())
+			beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- errors.Wrap(err, "failed to get vm info properties")
 			return
@@ -252,7 +252,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		if mt.Info.Result == nil {
 			err = errors.Errorf("expected VM, but got nil")
 			beeline.AddField(ctx, "stage", "got_nil_vm")
-			beeline.AddField(ctx, "err", err.Error())
+			beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- err
 			return
@@ -262,7 +262,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		if !ok {
 			err = errors.Errorf("expected ManagedObjectReference, but got %T", mt.Info.Result)
 			beeline.AddField(ctx, "stage", "vm_not_a_mo_ref")
-			beeline.AddField(ctx, "err", err.Error())
+			beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 			go i.terminateIfExists(backgroundCtx, name.String())
 			errChan <- err
 			return
@@ -294,7 +294,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 				task, err = newVM.Reconfigure(backgroundCtx, *configSpec)
 				if err != nil {
 					beeline.AddField(ctx, "stage", "reconfigure_vm_task")
-					beeline.AddField(ctx, "err", err.Error())
+					beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 					go i.terminateIfExists(backgroundCtx, name.String())
 					errChan <- errors.Wrap(err, "failed to create reconfigure vm task")
 					return
@@ -303,7 +303,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 				err = task.Wait(backgroundCtx)
 				if err != nil {
 					beeline.AddField(ctx, "stage", "reconfigure_vm_task_wait")
-					beeline.AddField(ctx, "err", err.Error())
+					beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 					go i.terminateIfExists(backgroundCtx, name.String())
 					errChan <- errors.Wrap(err, "reconfigure vm task failed")
 					return
@@ -314,7 +314,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 			task, err = newVM.PowerOn(backgroundCtx)
 			if err != nil {
 				beeline.AddField(ctx, "stage", "power_on_vm_task")
-				beeline.AddField(ctx, "err", err.Error())
+				beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 				go i.terminateIfExists(backgroundCtx, name.String())
 				errChan <- errors.Wrap(err, "failed to create vm power on task")
 				return
@@ -323,7 +323,7 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 			err = task.Wait(backgroundCtx)
 			if err != nil {
 				beeline.AddField(ctx, "stage", "power_on_vm_task_wait")
-				beeline.AddField(ctx, "err", err.Error())
+				beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 				go i.terminateIfExists(backgroundCtx, name.String())
 				if err != context.Canceled && err != context.DeadlineExceeded {
 					var interfaces []raven.Interface
@@ -430,7 +430,7 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 	releaseSem, err := i.requestDeleteSemaphore(ctx)
 	if err != nil {
 		beeline.AddField(ctx, "stage", "waiting_for_semaphore")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		return errors.Wrap(err, "timed out waiting for concurrency semaphore")
 	}
 	autoreleaseSem := true
@@ -444,7 +444,7 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 	client, err := i.client(ctx)
 	if err != nil {
 		beeline.AddField(ctx, "stage", "get_client")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		return err
 	}
 
@@ -453,14 +453,14 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 	vmRef, err := searchIndex.FindByInventoryPath(ctx, i.paths.VMPath+id)
 	if err != nil {
 		beeline.AddField(ctx, "stage", "find_vm")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		return errors.Wrap(err, "failed to search for vm")
 	}
 
 	if vmRef == nil {
 		err = VirtualMachineNotFoundError{Path: i.paths.VMPath, ID: id}
 		beeline.AddField(ctx, "stage", "vm_404")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		return err
 	}
 
@@ -468,7 +468,7 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 	if !ok {
 		err = errors.Errorf("not a VM, but a %T", vm)
 		beeline.AddField(ctx, "stage", "vm_incorrect_type")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		return err
 	}
 
@@ -476,7 +476,7 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 	task, err := vm.PowerOff(ctx)
 	if err != nil {
 		beeline.AddField(ctx, "stage", "vm_power_off_task")
-		beeline.AddField(ctx, "err", err.Error())
+		beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 		return errors.Wrap(err, "failed to create vm power off task")
 	}
 
@@ -498,7 +498,7 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 			// if the VM is still powered on.
 
 			// Send the error to Honeycomb, though
-			beeline.AddField(ctx, "power_off_err", err)
+			beeline.AddField(ctx, "power_off_err", fmt.Sprintf("%s", err))
 		}
 		beeline.AddField(ctx, "power_off_ms", float64(time.Since(powerOffStartTime).Nanoseconds())/1000000.0)
 
@@ -506,7 +506,7 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 		task, err = vm.Destroy(ctx)
 		if err != nil {
 			beeline.AddField(ctx, "stage", "destroy_vm_task")
-			beeline.AddField(ctx, "err", err.Error())
+			beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 			errChan <- errors.Wrap(err, "failed to create vm destroy task")
 			return
 		}
@@ -514,7 +514,7 @@ func (i *vSphereInstanceManager) Terminate(ctx context.Context, id string) error
 		err = task.Wait(ctx)
 		if err != nil {
 			beeline.AddField(ctx, "stage", "destroy_vm_task_wait")
-			beeline.AddField(ctx, "err", err.Error())
+			beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
 			errChan <- errors.Wrap(err, "vm destroy task failed")
 			return
 		}
