@@ -180,15 +180,20 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		return nil, err
 	}
 
+	resourcePool, err := i.resourcePool(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to find resource pool")
+	}
+
 	beeline.AddField(ctx, "setup_ms", float64(time.Since(startTime).Nanoseconds())/1000000.0)
 
 	cloneStartTime := time.Now()
 
 	var task *object.Task
 	if isFrozen {
-		task, err = i.createInstantClone(ctx, vm, vmFolder, name.String())
+		task, err = i.createInstantClone(ctx, vm, vmFolder, name.String(), resourcePool)
 	} else {
-		task, err = i.createLinkedClone(ctx, vm, snapshotTree, vmFolder, name.String())
+		task, err = i.createLinkedClone(ctx, vm, snapshotTree, vmFolder, name.String(), resourcePool)
 	}
 
 	if err != nil {
@@ -370,17 +375,12 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 	}
 }
 
-func (i *vSphereInstanceManager) createLinkedClone(ctx context.Context, baseVM *object.VirtualMachine, snapshotTree types.VirtualMachineSnapshotTree, vmFolder *object.Folder, name string) (*object.Task, error) {
+func (i *vSphereInstanceManager) createLinkedClone(ctx context.Context, baseVM *object.VirtualMachine, snapshotTree types.VirtualMachineSnapshotTree, vmFolder *object.Folder, name string, pool *types.ManagedObjectReference) (*object.Task, error) {
 	beeline.AddField(ctx, "instant_clone", false)
-
-	resourcePool, err := i.resourcePool(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to find resource pool")
-	}
 
 	relocateSpec := types.VirtualMachineRelocateSpec{
 		DiskMoveType: string(types.VirtualMachineRelocateDiskMoveOptionsCreateNewChildDiskBacking),
-		Pool:         resourcePool,
+		Pool:         pool,
 	}
 
 	cloneSpec := types.VirtualMachineCloneSpec{
@@ -393,7 +393,7 @@ func (i *vSphereInstanceManager) createLinkedClone(ctx context.Context, baseVM *
 	return baseVM.Clone(ctx, vmFolder, name, cloneSpec)
 }
 
-func (i *vSphereInstanceManager) createInstantClone(ctx context.Context, baseVM *object.VirtualMachine, vmFolder *object.Folder, name string) (*object.Task, error) {
+func (i *vSphereInstanceManager) createInstantClone(ctx context.Context, baseVM *object.VirtualMachine, vmFolder *object.Folder, name string, pool *types.ManagedObjectReference) (*object.Task, error) {
 	beeline.AddField(ctx, "instant_clone", true)
 
 	destFolderRef := vmFolder.Reference()
@@ -401,6 +401,7 @@ func (i *vSphereInstanceManager) createInstantClone(ctx context.Context, baseVM 
 		Name: name,
 		Location: types.VirtualMachineRelocateSpec{
 			Folder: &destFolderRef,
+			Pool:   pool,
 		},
 	}
 
