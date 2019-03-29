@@ -2,7 +2,7 @@ PACKAGE := github.com/travis-ci/jupiter-brain
 ALL_PACKAGES := $(shell go list ./... | grep -v /vendor/)
 
 VERSION_VAR := main.VersionString
-VERSION_VALUE ?= $(shell git describe --always --dirty 2> /dev/null)
+VERSION_VALUE ?= $(shell git describe --tags --always --dirty 2> /dev/null)
 REV_VAR := main.RevisionString
 REV_VALUE ?= $(shell git rev-parse HEAD 2> /dev/null || echo "???")
 GENERATED_VAR := main.GeneratedString
