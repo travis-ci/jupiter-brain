@@ -217,6 +217,21 @@ func (i *vSphereInstanceManager) Start(ctx context.Context, config InstanceConfi
 		defer cancel()
 
 		err := task.Wait(backgroundCtx)
+		if err != nil && isFrozen {
+			// If an instant clone fails, fallback to an ordinary linked clone
+			isFrozen = false
+			task, err = i.createLinkedClone(backgroundCtx, vm, snapshotTree, vmFolder, name.String(), resourcePool)
+			if err != nil {
+				beeline.AddField(ctx, "stage", "clone_vm_task")
+				beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
+				go i.terminateIfExists(backgroundCtx, name.String())
+				errChan <- errors.Wrap(err, "failed to create vm clone task")
+				return
+			}
+
+			err = task.Wait(backgroundCtx)
+		}
+
 		if err != nil {
 			beeline.AddField(ctx, "stage", "clone_vm_task_wait")
 			beeline.AddField(ctx, "err", fmt.Sprintf("%s", err))
